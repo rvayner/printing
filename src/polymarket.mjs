@@ -21,27 +21,38 @@ async function getJson(url) {
 // Resolved markets since a date. Prefer slower-resolving markets (politics, macro)
 // over fast crypto — that's where a follower's entry can still beat the price.
 export async function getResolvedMarkets({ sinceISO, limit = 500 } = {}) {
-  const params = new URLSearchParams({
-    closed: 'true', limit: String(limit), order: 'endDate', ascending: 'false',
-  });
-  if (sinceISO) params.set('end_date_min', sinceISO);
-  const markets = await getJson(`${GAMMA}/markets?${params}`);
-  return markets
-    .filter((m) => m.conditionId && Array.isArray(m.outcomePrices))
-    .map((m) => {
-      // winning outcome index: the resolved price closest to 1
-      const prices = m.outcomePrices.map(Number);
-      const winIdx = prices.indexOf(Math.max(...prices));
-      return {
-        conditionId: m.conditionId,
-        question: m.question,
-        endDate: m.endDate,
-        category: m.category || 'other',
-        tokenIds: JSON.parse(m.clobTokenIds || '[]'),
-        winningTokenIndex: winIdx,         // 0 or 1 (Yes/No order from `outcomes`)
-        liquidity: Number(m.liquidity || 0),
-      };
+  const out = [];
+  const PAGE = 500;
+  for (let offset = 0; out.length < limit; offset += PAGE) {
+    const params = new URLSearchParams({
+      closed: 'true', limit: String(PAGE), offset: String(offset), order: 'endDate', ascending: 'false',
     });
+    if (sinceISO) params.set('end_date_min', sinceISO);
+    // eslint-disable-next-line no-await-in-loop
+    const markets = await getJson(`${GAMMA}/markets?${params}`);
+    if (!markets.length) break;
+    pushResolved(markets, out);
+    if (markets.length < PAGE) break;
+  }
+  return out.slice(0, limit);
+}
+
+function pushResolved(markets, out) {
+  for (const m of markets) {
+    if (!m.conditionId) continue;
+    let prices = [];
+    try { prices = JSON.parse(m.outcomePrices || '[]').map(Number); } catch { /* not resolved */ }
+    if (prices.length < 2 || !prices.some((p) => p >= 0.99)) continue;  // must be resolved
+    out.push({
+      conditionId: m.conditionId,
+      question: m.question,
+      endDate: m.endDate,
+      category: m.category || 'other',
+      tokenIds: (() => { try { return JSON.parse(m.clobTokenIds || '[]'); } catch { return []; } })(),
+      winningTokenIndex: prices.indexOf(Math.max(...prices)),  // 0 or 1
+      liquidity: Number(m.liquidity || 0),
+    });
+  }
 }
 
 // All trades in a market, with the trader wallet on each.
@@ -116,8 +127,10 @@ export async function getMarketState(conditionId) {
 export async function getMarketResolution(conditionId) {
   const arr = await getJson(`${GAMMA}/markets?condition_ids=${conditionId}`);
   const m = Array.isArray(arr) ? arr[0] : arr;
-  if (!m || m.closed !== true || !Array.isArray(m.outcomePrices)) return null;
-  const prices = m.outcomePrices.map(Number);
+  if (!m || m.closed !== true) return null;
+  let prices = [];
+  try { prices = JSON.parse(m.outcomePrices || '[]').map(Number); } catch { return null; }
+  if (prices.length < 2 || !prices.some((p) => p >= 0.99)) return null;
   return prices.indexOf(Math.max(...prices));   // 0/1 winning index
 }
 
@@ -132,7 +145,7 @@ export async function getTokenBestAsk(tokenId) {
 }
 
 // High-level: build the wallet→bets map across many resolved markets.
-export async function buildWalletBets({ sinceISO, marketLimit = 300, throttleMs = 250 } = {}) {
+export async function buildWalletBets({ sinceISO, marketLimit = 300, throttleMs = 80 } = {}) {
   const markets = await getResolvedMarkets({ sinceISO, limit: marketLimit });
   const walletBets = new Map();
   for (const m of markets) {
