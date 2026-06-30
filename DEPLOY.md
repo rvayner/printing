@@ -38,6 +38,23 @@ node --env-file=.env run.mjs --since 2026-01-01 --markets 300
 - **⛔** → no statistically-proven, persistent wallets. The bot stays silent. This
   is the system being honest, not broken — do not override it.
 
+## 3.5 THE GO/NO-GO GATE — walk-forward on real data
+
+Before risking anything, get the real out-of-sample verdict on actual wallets:
+
+```bash
+node --env-file=.env walkforward.mjs --since 2026-01-01 --markets 400
+```
+- **❌ FAIL** (the likely outcome) → there is no trustworthy edge. **Do not deploy
+  real money.** Stop here. This is the tool doing its job.
+- **✅ PASS** → a strong, robust, cost-aware edge existed out-of-sample. Necessary
+  evidence — still NOT a guarantee (edges decay; you add competition). Proceed to
+  paper trading, then real money only small.
+
+The bar is intentionally high: in self-tests, even a real 6¢ edge FAILED. So a PASS
+on real data means something. Trust this over any in-sample number or anyone's
+confidence (including the build's).
+
 ## 4. Launch everything (pm2)
 
 ```bash
