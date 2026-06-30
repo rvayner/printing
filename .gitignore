@@ -1,0 +1,5 @@
+# generated runtime state — not source
+validated-wallets.json
+paper-positions.json
+seen-trades.json
+*.log
