@@ -7,8 +7,28 @@
 // bet is still mostly variance; the edge only shows over many scored follows.
 
 import { evaluateWallet } from './skill.mjs';
+import { CONFIG } from '../config.mjs';
 
 const clamp = (x, lo = 0, hi = 1) => Math.max(lo, Math.min(hi, x));
+
+// How fast must you act? Fresh bet + soon-resolving = ACT NOW; long-dated = patient.
+function urgencyOf(ageMin, hoursLeft) {
+  const fresh = ageMin != null && ageMin <= CONFIG.FRESH_MINS;
+  const soon = hoursLeft != null && hoursLeft <= CONFIG.SOON_HOURS;
+  if (fresh) return { level: 'ACT NOW', reason: soon ? 'fresh bet, resolves soon — price moving now' : 'placed in last hour — get in before the price moves' };
+  if (soon) return { level: 'today', reason: 'resolves soon — limited window' };
+  if (ageMin != null && ageMin <= 360) return { level: 'today', reason: 'placed within ~6h' };
+  return { level: 'patient', reason: 'long-dated — good entry, no rush' };
+}
+
+// How insider-like is this? Honest tiers — never "certain".
+function insiderRead(categoryCI, conviction, niche) {
+  const proven = categoryCI && categoryCI.significant;
+  if (proven && conviction >= 0.7 && niche) return { tier: 'HIGH', note: 'proven specialist + big conviction + niche market = most insider-like (still NOT a lock)' };
+  if (proven && conviction >= 0.5) return { tier: 'MEDIUM', note: 'proven specialist with real conviction' };
+  if (proven) return { tier: 'LOW-MED', note: 'proven category edge, but low conviction' };
+  return { tier: 'LOW', note: 'no proven category edge — could be MM/hedge/noise' };
+}
 
 // 95% confidence interval on the wallet's true edge per bet (wins above what its
 // own entry prices implied). If the LOWER bound > 0, the edge is statistically
@@ -73,9 +93,16 @@ function composite(overall, category, signal) {
   const conviction = (vsSelf + vsMkt) / 2;
   const entryScore = clamp(1 - (signal.entryVsWhalePrice || 0) / 0.05);
   const score = Math.round(100 * (0.40 * edgeScore + 0.20 * catScore + 0.20 * conviction + 0.20 * entryScore));
+  const niche = (signal.marketLiquidity || Infinity) < CONFIG.NICHE_LIQUIDITY;
+  const maxSize = Math.floor((signal.marketLiquidity || 0) * CONFIG.MAX_FILL_FRACTION);
+  const urgency = urgencyOf(signal.signalAgeMin, signal.hoursToResolve);
+  const insider = insiderRead(category, conviction, niche);
   return {
     score, breakdown: { edgeScore, catScore, conviction, entryScore },
     edgeCI: overall, categoryCI: category,
     verdict: score >= 70 ? 'STRONG' : score >= 50 ? 'fair' : 'weak — likely skip',
+    urgency, insider,
+    niche: { isNiche: niche, maxSize },
+    reality: `NOT a lock — informed money favors it; expected win ≈ the market price, not 100%. Your edge = the wallet's proven ${(overall.lo * 100).toFixed(1)}¢ CI-low, minus slippage.`,
   };
 }

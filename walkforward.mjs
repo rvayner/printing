@@ -11,6 +11,7 @@
 // necessary evidence — still NOT a guarantee of future profit (edges decay, and
 // once you trade you add competition). A FAIL = do not deploy real money. Period.
 
+import { writeFileSync } from 'node:fs';
 import { CONFIG } from './config.mjs';
 import { validateWallets } from './src/skill.mjs';
 import { scoreFromProfile } from './src/score.mjs';
@@ -121,6 +122,25 @@ const gates = {
 console.log('\nGates:');
 for (const [k, v] of Object.entries(gates)) console.log(`  ${v ? '✅' : '❌'} ${k}`);
 const PASS = Object.values(gates).every(Boolean);
-console.log(`\n${PASS ? '✅ PASS' : '❌ FAIL'} — ${PASS
+const verdictLine = PASS
   ? 'a real out-of-sample edge existed historically. Necessary evidence — still not a guarantee. Paper-trade live, then risk small.'
-  : 'no trustworthy out-of-sample edge. DO NOT deploy real money.'}`);
+  : 'no trustworthy out-of-sample edge. DO NOT deploy real money.';
+console.log(`\n${PASS ? '✅ PASS' : '❌ FAIL'} — ${verdictLine}`);
+
+// ---- optional saved/pushable report ----
+if (has('report') || has('notify')) {
+  const text = [
+    `${SELFTEST ? '[SELF-TEST] ' : ''}Walk-forward verdict: ${PASS ? '✅ PASS' : '❌ FAIL'}`,
+    `OOS follows ${follows.length} · win ${(wins / follows.length * 100).toFixed(1)}% · ROI ${(roi * 100).toFixed(2)}%`,
+    `edge/follow ${(edgeMean * 100).toFixed(2)}¢  CI [${(ciLo * 100).toFixed(2)}, ${(ciHi * 100).toFixed(2)}]¢ · folds +${foldsPositive}/${FOLDS}`,
+    ...Object.entries(gates).map(([k, v]) => `${v ? '✅' : '❌'} ${k}`),
+    verdictLine,
+  ].join('\n');
+  const report = { generatedAt: new Date().toISOString(), mode: SELFTEST ? 'selftest' : 'real',
+    follows: follows.length, winRate: wins / follows.length, roi, edgeMean, ci: [ciLo, ciHi],
+    foldsPositive, folds: FOLDS, gates, PASS };
+  writeFileSync(new URL('./walkforward-report.json', import.meta.url).pathname, JSON.stringify(report, null, 2));
+  writeFileSync(new URL('./walkforward-report.txt', import.meta.url).pathname, text);
+  console.log('\nSaved walkforward-report.json / .txt');
+  if (has('notify')) { const { sendAlert } = await import('./src/notify.mjs'); await sendAlert(text); console.log('Pushed verdict to configured channels.'); }
+}

@@ -17,4 +17,9 @@ export const CONFIG = {
   MIN_SCORE: 60,             // only alert/paper-trade signals scoring ≥ this (0-100)
   SURGE_WINDOW_MS: 6 * 3600 * 1000, // window to detect converging validated wallets
   SURGE_MIN_WALLETS: 2,      // distinct validated wallets on same outcome = surge
+  // Urgency + niche:
+  FRESH_MINS: 60,            // a whale bet placed within this is "fresh" → act fast
+  SOON_HOURS: 12,            // market resolving within this is time-sensitive
+  NICHE_LIQUIDITY: 15000,    // below this = niche/obscure (informed-likely but thin)
+  MAX_FILL_FRACTION: 0.05,   // never try to fill more than this share of liquidity
 };

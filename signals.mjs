@@ -49,13 +49,17 @@ async function evaluateSignal(trade, getState, getAsk) {
 
 function formatAlert(trade, ev, sc, surge) {
   const ci = sc.edgeCI;
+  const ageMin = trade.time ? Math.round((Date.now() - trade.time) / 60000) : null;
   const lines = [
-    `${surge?.surge ? '🚨 SURGE' : '🐋 FOLLOW'} SIGNAL — score ${sc.score}/100 (${sc.verdict})`,
+    `${surge?.surge ? '🚨 SURGE' : '🐋 FOLLOW'} — score ${sc.score}/100 (${sc.verdict}) · ⏱ ${sc.urgency.level}`,
     `   ${ev.market.question}`,
-    `   wallet ${trade.wallet.slice(0, 10)}…  BUY outcome[${trade.outcomeIndex}] @ ${(trade.price*100).toFixed(0)}¢  size $${trade.size.toFixed(0)}`,
+    `   wallet ${trade.wallet.slice(0, 10)}…  BUY outcome[${trade.outcomeIndex}] @ ${(trade.price*100).toFixed(0)}¢  size $${trade.size.toFixed(0)}${ageMin != null ? `  (${ageMin}m ago)` : ''}`,
+    `   insider-confidence: ${sc.insider.tier} — ${sc.insider.note}`,
+    `   urgency: ${sc.urgency.level} — ${sc.urgency.reason}`,
     `   wallet edge ${(ci.edgePerBet*100).toFixed(1)}¢  95% CI [${(ci.lo*100).toFixed(1)}, ${(ci.hi*100).toFixed(1)}]¢ (n=${ci.n})`,
-    `   live ask ${(ev.ask*100).toFixed(0)}¢  →  place LIMIT BUY ≤ ${(ev.maxEntry*100).toFixed(0)}¢`,
+    `   live ask ${(ev.ask*100).toFixed(0)}¢  →  LIMIT BUY ≤ ${(ev.maxEntry*100).toFixed(0)}¢${sc.niche.isNiche ? `  ·  ⚠ NICHE: max size ~$${sc.niche.maxSize}` : ''}`,
     `   liquidity $${ev.market.liquidity.toFixed(0)}  ·  ${ev.market.category}  ·  ${ev.hoursLeft.toFixed(1)}h to resolve`,
+    `   ⚖ ${sc.reality}`,
   ];
   if (surge?.surge) lines.push(`   ⚡ ${surge.count} validated wallets converging on this outcome`);
   return lines.join('\n');
@@ -79,7 +83,8 @@ async function pollOnce(wallets, seen, fetchers) {
         profile: prof.overall,
         categoryProfile: prof.cats?.[ev.market.category] || null,
         signal: { size: t.size, marketLiquidity: ev.market.liquidity,
-          entryVsWhalePrice: Math.max(0, ev.ask - t.price), category: ev.market.category },
+          entryVsWhalePrice: Math.max(0, ev.ask - t.price), category: ev.market.category,
+          signalAgeMin: t.time ? (Date.now() - t.time) / 60000 : null, hoursToResolve: ev.hoursLeft },
       });
       if (sc.score < CONFIG.MIN_SCORE) continue;        // too weak — skip
 

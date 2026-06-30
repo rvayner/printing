@@ -2,4 +2,6 @@
 validated-wallets.json
 paper-positions.json
 seen-trades.json
+walkforward-report.json
+walkforward-report.txt
 *.log
