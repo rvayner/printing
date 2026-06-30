@@ -47,14 +47,17 @@ async function mapLimit(items, limit, fn, onProgress) {
 // over fast crypto — that's where a follower's entry can still beat the price.
 export async function getResolvedMarkets({ sinceISO, limit = 500 } = {}) {
   const out = [];
-  const PAGE = 500;
+  const PAGE = 100;   // Gamma caps page size at 100 regardless of `limit`
   for (let offset = 0; out.length < limit; offset += PAGE) {
     const params = new URLSearchParams({
       closed: 'true', limit: String(PAGE), offset: String(offset), order: 'endDate', ascending: 'false',
     });
     if (sinceISO) params.set('end_date_min', sinceISO);
-    // eslint-disable-next-line no-await-in-loop
-    const markets = await getJson(`${GAMMA}/markets?${params}`);
+    let markets;
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      markets = await getJson(`${GAMMA}/markets?${params}`);
+    } catch { break; }                 // 422 = hit Gamma's max pagination depth → stop
     if (!markets.length) break;
     pushResolved(markets, out);
     if (markets.length < PAGE) break;
