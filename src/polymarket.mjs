@@ -37,9 +37,13 @@ export async function getResolvedMarkets({ sinceISO, limit = 500 } = {}) {
   return out.slice(0, limit);
 }
 
+// High-frequency crypto / hourly markets — HFT-bot noise, not informed events.
+const HIGH_FREQ = /up or down|\b\d{1,2}(:\d{2})?\s?(am|pm)\b|hourly|every hour|\b(5|10|15)[- ]?min/i;
+
 function pushResolved(markets, out) {
   for (const m of markets) {
     if (!m.conditionId) continue;
+    if (HIGH_FREQ.test(m.question || '')) continue;   // skip 15-min crypto churn
     let prices = [];
     try { prices = JSON.parse(m.outcomePrices || '[]').map(Number); } catch { /* not resolved */ }
     if (prices.length < 2 || !prices.some((p) => p >= 0.99)) continue;  // must be resolved
@@ -142,6 +146,60 @@ export async function getTokenBestAsk(tokenId) {
     const asks = (book.asks || []).map((a) => Number(a.price)).filter((x) => x > 0);
     return asks.length ? Math.min(...asks) : null;
   } catch { return null; }
+}
+
+// Resolved-market info (winning side + category), cached across wallets.
+const _marketInfo = new Map();
+export async function getMarketInfo(conditionId) {
+  if (_marketInfo.has(conditionId)) return _marketInfo.get(conditionId);
+  let info = null;
+  try {
+    const arr = await getJson(`${GAMMA}/markets?condition_ids=${conditionId}`);
+    const m = Array.isArray(arr) ? arr[0] : arr;
+    if (m && m.closed === true) {
+      let prices = [];
+      try { prices = JSON.parse(m.outcomePrices || '[]').map(Number); } catch { /* unresolved */ }
+      if (prices.length >= 2 && prices.some((p) => p >= 0.99)) {
+        info = { winningIndex: prices.indexOf(Math.max(...prices)), category: m.category || 'other' };
+      }
+    }
+  } catch { /* ignore */ }
+  _marketInfo.set(conditionId, info);
+  return info;
+}
+
+// WALLET-CENTRIC pull: discover active wallets, then fetch each one's COMPLETE
+// trade history → full track records (the market-centric pull only saw partial
+// histories). This is what makes a conclusive walk-forward possible.
+export async function buildWalletBetsDeep({ marketLimit = 150, maxWallets = 80, activityLimit = 500, throttleMs = 60 } = {}) {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  // 1) discover active wallets via a quick market-centric pass
+  console.log(`Discovering active wallets from ${marketLimit} markets…`);
+  const shallow = await buildWalletBets({ marketLimit, throttleMs });
+  const candidates = [...shallow.entries()].sort((a, b) => b[1].length - a[1].length).slice(0, maxWallets).map(([w]) => w);
+  console.log(`Enriching ${candidates.length} wallets with full trade history…`);
+
+  // 2) pull each candidate's complete history and resolve every market
+  const out = new Map();
+  let done = 0;
+  for (const wallet of candidates) {
+    let acts;
+    try { acts = await getWalletActivity(wallet, { limit: activityLimit }); }
+    catch { continue; }
+    const bets = [];
+    for (const a of acts) {
+      if (a.side !== 'BUY') continue;
+      // eslint-disable-next-line no-await-in-loop
+      const info = await getMarketInfo(a.conditionId);
+      if (!info) continue;                                  // unresolved → skip
+      bets.push({ wallet, marketId: a.conditionId, time: a.time, cost: a.price,
+        won: a.outcomeIndex === info.winningIndex ? 1 : 0, size: a.size, category: info.category });
+    }
+    if (bets.length) out.set(wallet, bets);
+    if (++done % 10 === 0) console.log(`  …${done}/${candidates.length} wallets`);
+    await sleep(throttleMs);
+  }
+  return out;
 }
 
 // High-level: build the wallet→bets map across many resolved markets.

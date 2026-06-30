@@ -49,7 +49,10 @@ function synthData() {
 }
 
 async function realData() {
-  const { buildWalletBets } = await import('./src/polymarket.mjs');
+  const { buildWalletBets, buildWalletBetsDeep } = await import('./src/polymarket.mjs');
+  if (has('deep')) {
+    return buildWalletBetsDeep({ marketLimit: Number(arg('markets', 150)), maxWallets: Number(arg('wallets', 80)) });
+  }
   return buildWalletBets({ sinceISO: arg('since', '2026-01-01'), marketLimit: Number(arg('markets', 400)) });
 }
 
