@@ -37,10 +37,10 @@ module.exports = {
       cron_restart: '*/30 * * * *',
     },
     {
-      // re-validate wallets daily (track records grow over time)
+      // re-validate wallets daily (track records grow) + text the morning briefing
       name: 'whale-revalidate',
       script: 'run.mjs',
-      args: '--since 2026-01-01 --markets 300',
+      args: '--since 2026-01-01 --markets 300 --notify',
       node_args: '--env-file=.env',
       cwd: __dirname,
       autorestart: false,

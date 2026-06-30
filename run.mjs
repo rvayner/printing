@@ -5,7 +5,7 @@
 // Needs live network access to Polymarket (sandbox: use simulate.mjs instead).
 // Usage: node run.mjs --since 2026-01-01 --markets 300
 
-import { writeFileSync } from 'node:fs';
+import { writeFileSync, existsSync, readFileSync } from 'node:fs';
 import { CONFIG } from './config.mjs';
 import { buildWalletBets } from './src/polymarket.mjs';
 import { validateWallets } from './src/skill.mjs';
@@ -14,17 +14,36 @@ import { followBacktest } from './src/backtest.mjs';
 import { categoryLeaderboards, formatLeaderboards } from './src/leaderboard.mjs';
 
 const arg = (k, d) => { const i = process.argv.indexOf(`--${k}`); return i >= 0 ? process.argv[i + 1] : d; };
+const has = (k) => process.argv.includes(`--${k}`);
 const sinceISO = arg('since', '2026-01-01');
 const marketLimit = Number(arg('markets', 300));
+const SELFTEST = has('selftest');
 
-console.log(`Pulling Polymarket resolved-market trades since ${sinceISO} (≤${marketLimit} markets)…`);
+// Synthetic data so the whole pipeline (+ daily digest) runs without network.
+function synthData() {
+  let seed = 123; const rng = () => { seed |= 0; seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const U = (lo, hi) => lo + (hi - lo) * rng(); const CATS = ['politics', 'crypto', 'world', 'econ']; const pick = (a) => a[Math.floor(rng() * a.length)];
+  const t0 = Date.parse('2026-01-01'); const span = 180 * 864e5;
+  const make = (w, n, edge, spec) => { const b = []; for (let i = 0; i < n; i++) { const category = rng() < 0.6 ? (spec || pick(CATS)) : pick(CATS); const isE = spec && category === spec; const cost = U(0.2, 0.8); const tp = Math.min(0.97, Math.max(0.03, cost + (isE ? edge : 0))); b.push({ wallet: w, marketId: `${w}-${i}`, category, time: t0 + rng() * span, cost, won: rng() < tp ? 1 : 0, size: isE ? U(2000, 9000) : U(100, 800) }); } return b; };
+  const m = new Map();
+  for (let i = 0; i < 16; i++) m.set(`skill_${i}`, make(`skill_${i}`, 1600, 0.08, pick(CATS)));
+  for (let i = 0; i < 120; i++) m.set(`luck_${i}`, make(`luck_${i}`, 1600, 0, null));
+  return m;
+}
+
 let walletBets;
-try {
-  walletBets = await buildWalletBets({ sinceISO, marketLimit });
-} catch (err) {
-  console.error(`\nCould not reach Polymarket: ${err.message}`);
-  console.error('This pipeline needs live network access. To prove the logic works, run: node simulate.mjs');
-  process.exit(1);
+if (SELFTEST) {
+  console.log('[SELF-TEST] synthetic wallets (no network) — verifies the full pipeline + digest.');
+  walletBets = synthData();
+} else {
+  console.log(`Pulling Polymarket resolved-market trades since ${sinceISO} (≤${marketLimit} markets)…`);
+  try {
+    walletBets = await buildWalletBets({ sinceISO, marketLimit });
+  } catch (err) {
+    console.error(`\nCould not reach Polymarket: ${err.message}`);
+    console.error('This pipeline needs live network access. To prove the logic works, run: node run.mjs --selftest');
+    process.exit(1);
+  }
 }
 
 const allBets = [...walletBets.values()].flat();
@@ -81,6 +100,16 @@ console.log('\n──── Category specialists (ranked by proven edge) ──�
 console.log(formatLeaderboards(boards));
 
 const outPath = new URL('./validated-wallets.json', import.meta.url).pathname;
+
+// Read the PREVIOUS run first (for change detection) before overwriting.
+let prev = null;
+if (existsSync(outPath)) { try { prev = JSON.parse(readFileSync(outPath)); } catch { /* ignore */ } }
+const prevSet = new Set((prev?.wallets || []).map((w) => w.wallet));
+const nowSet = new Set(walletsWithProfiles.map((w) => w.wallet));
+const entered = [...nowSet].filter((w) => !prevSet.has(w));
+const dropped = [...prevSet].filter((w) => !nowSet.has(w));
+const statusChanged = prev != null && prev.safeToFollow !== safeToFollow;
+
 writeFileSync(outPath, JSON.stringify({
   generatedAt: new Date().toISOString(),
   safeToFollow,
@@ -94,5 +123,25 @@ console.log(`\nSaved ${gate.validated.length} validated wallet(s) → ${outPath}
 console.log(safeToFollow
   ? '✅ Evidence supports following. Run: node signals.mjs   (watches these wallets live)'
   : '⛔ Evidence does NOT support following (no validation / no persistence / negative backtest). Do NOT follow.');
+
+// ---- daily briefing (saved/pushable) ----
+if (has('notify') || has('report')) {
+  const topPerCat = Object.entries(boards)
+    .map(([c, rows]) => rows[0] ? `${c}: ${rows[0].wallet.slice(0, 10)}… ${(rows[0].edge * 100).toFixed(1)}¢ (n=${rows[0].n})` : null)
+    .filter(Boolean).join('\n');
+  const digest = [
+    `📅 whale-tracker — ${new Date().toISOString().slice(0, 10)}`,
+    `${safeToFollow ? '✅ FOLLOW OK' : '⛔ DO NOT follow'}${statusChanged ? '  ⚠️ STATUS CHANGED' : ''}`,
+    `${walletsWithProfiles.length} validated wallet(s)  (+${entered.length} new, -${dropped.length} dropped)`,
+    entered.length ? `🆕 ${entered.map((w) => w.slice(0, 10) + '…').join(', ')}` : '',
+    dropped.length ? `❌ dropped: ${dropped.map((w) => w.slice(0, 10) + '…').join(', ')}` : '',
+    topPerCat ? `\nTop specialists:\n${topPerCat}` : '',
+    `\nReminder: go-live still needs a walk-forward PASS + months of paper.`,
+  ].filter(Boolean).join('\n');
+  if (has('report')) writeFileSync(new URL('./run-report.txt', import.meta.url).pathname, digest);
+  console.log('\n' + digest);
+  if (has('notify')) { const { sendAlert } = await import('./src/notify.mjs'); await sendAlert(digest); console.log('\nPushed daily briefing to configured channels.'); }
+}
+
 console.log('\nDECISION RULE: only follow if (validated wallets exist) AND (persistence holds)');
 console.log('AND (out-of-sample follow P&L is positive after slippage). Anything less = luck.');
