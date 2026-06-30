@@ -68,6 +68,39 @@ export async function getResolvedMarkets({ sinceISO, limit = 500 } = {}) {
 // High-frequency crypto / hourly markets — HFT-bot noise, not informed events.
 const HIGH_FREQ = /up or down|\b\d{1,2}(:\d{2})?\s?(am|pm)\b|hourly|every hour|\b(5|10|15)[- ]?min/i;
 
+// Currently OPEN markets with their favorite (highest-priced) outcome — for the
+// live favorites scanner. Ranked by volume so the liquid ones come first.
+export async function getActiveMarkets({ limit = 800 } = {}) {
+  const out = [];
+  const PAGE = 100;
+  for (let offset = 0; out.length < limit; offset += PAGE) {
+    const params = new URLSearchParams({
+      active: 'true', closed: 'false', limit: String(PAGE), offset: String(offset),
+      order: 'volume', ascending: 'false',
+    });
+    let ms;
+    try { ms = await getJson(`${GAMMA}/markets?${params}`); } catch { break; }
+    if (!ms.length) break;
+    for (const m of ms) {
+      if (!m.conditionId) continue;
+      let prices = [], outcomes = [];
+      try { prices = JSON.parse(m.outcomePrices || '[]').map(Number); } catch { continue; }
+      try { outcomes = JSON.parse(m.outcomes || '[]'); } catch { /* ignore */ }
+      if (prices.length < 2) continue;
+      const favIndex = prices.indexOf(Math.max(...prices));
+      out.push({
+        conditionId: m.conditionId, question: m.question, category: m.category || 'other',
+        favIndex, favPrice: prices[favIndex], favName: outcomes[favIndex] || `outcome[${favIndex}]`,
+        liquidity: Number(m.liquidity || m.liquidityNum || 0),
+        endDate: m.endDate ? Date.parse(m.endDate) : null,
+        tokenIds: (() => { try { return JSON.parse(m.clobTokenIds || '[]'); } catch { return []; } })(),
+      });
+    }
+    if (ms.length < PAGE) break;
+  }
+  return out.slice(0, limit);
+}
+
 function pushResolved(markets, out) {
   for (const m of markets) {
     if (!m.conditionId) continue;
