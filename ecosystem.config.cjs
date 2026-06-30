@@ -18,6 +18,17 @@ module.exports = {
       restart_delay: 5000,
     },
     {
+      // SMART-MONEY tracker: live-watch big bets on uncertain markets (+11% edge)
+      name: 'smart-money',
+      script: 'smart-money.mjs',
+      args: '--paper --notify',
+      node_args: '--env-file=.env',
+      cwd: __dirname,
+      autorestart: true,
+      max_restarts: 100,
+      restart_delay: 5000,
+    },
+    {
       // PRIMARY STRATEGY: scan favorites (the proven +9% edge) daily, paper-trade + alert
       name: 'favorites-scan',
       script: 'favorites-scan.mjs',

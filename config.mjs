@@ -28,6 +28,12 @@ export const CONFIG = {
   BANKROLL: 1000,            // your bankroll, for suggested bet sizes in alerts
   KELLY_MULT: 0.25,          // quarter-Kelly — safety margin against bad estimates
   MAX_BANKROLL_FRAC: 0.05,   // never stake more than 5% of bankroll on one bet
+  // Smart-money / insider tracker (validated: big bets on uncertain NON-SPORTS
+  // political/event markets are informed → +22% ROI):
+  SMART_MIN_USD: 1000,       // a bet ≥ this $ on an uncertain event market = signal
+  SMART_LO: 0.35, SMART_HI: 0.70, // uncertain band where insider info shows
+  SMART_EXCLUDE: ['sports', 'crypto'], // no insider edge here (sharp bettors, not insiders)
+  SMART_FRESH_TRADES: 25,    // a wallet with ≤ this many trades = FRESH (insider signature)
   // Diversification guard (favorites have negative skew → correlation is the risk):
   MAX_PER_EVENT: 1,          // at most this many positions per Polymarket event
   MAX_CATEGORY_FRAC: 0.30,   // ≤30% of bankroll in any one category

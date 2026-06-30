@@ -161,6 +161,7 @@ export function toBets(trades, market) {
       cost: t.price,                      // their implied prob = price paid
       won,
       size: t.size,
+      title: market.question,             // to categorize (sports vs political/event)
       category: market.category,
     });
   }
@@ -168,6 +169,24 @@ export function toBets(trades, market) {
 }
 
 const CLOB = 'https://clob.polymarket.com';
+
+// Recent GLOBAL trades (live) — for detecting big informed bets in real time.
+export async function getRecentTrades({ limit = 500 } = {}) {
+  const rows = await getJson(`${DATA}/trades?limit=${limit}`);
+  return rows.map((t) => ({
+    id: t.transactionHash || `${t.conditionId}-${t.timestamp}`,
+    wallet: t.proxyWallet,
+    conditionId: t.conditionId,
+    outcomeIndex: t.outcomeIndex,
+    side: t.side,
+    price: Number(t.price),
+    size: Number(t.size),
+    notional: Number(t.size) * Number(t.price),
+    title: t.title,
+    outcome: t.outcome,
+    time: Number(t.timestamp) * 1000,
+  }));
+}
 
 // A wallet's most recent trades (live) — used by the real-time watcher.
 export async function getWalletActivity(wallet, { limit = 50 } = {}) {
