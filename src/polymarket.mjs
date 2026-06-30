@@ -12,10 +12,35 @@
 const GAMMA = 'https://gamma-api.polymarket.com';
 const DATA = 'https://data-api.polymarket.com';
 
-async function getJson(url) {
-  const res = await fetch(url, { headers: { accept: 'application/json' } });
-  if (!res.ok) throw new Error(`${res.status} ${url}`);
-  return res.json();
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Resilient GET: retries on 429 / 5xx with exponential backoff so a long bulk
+// pull survives transient rate limits and network blips.
+async function getJson(url, { retries = 4 } = {}) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const res = await fetch(url, { headers: { accept: 'application/json' } });
+      if (res.status === 429 || res.status >= 500) throw new Error(`status ${res.status}`);
+      if (!res.ok) throw new Error(`${res.status} ${url}`);
+      return await res.json();
+    } catch (e) {
+      if (attempt >= retries) throw e;
+      await sleep(400 * 2 ** attempt);   // 0.4s, 0.8s, 1.6s, 3.2s
+    }
+  }
+}
+
+// Run async `fn` over `items` with bounded concurrency + progress callback.
+async function mapLimit(items, limit, fn, onProgress) {
+  let i = 0, done = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (i < items.length) {
+      const idx = i++;
+      try { await fn(items[idx], idx); } catch { /* skip one failure */ }
+      if (onProgress) onProgress(++done, items.length);
+    }
+  });
+  await Promise.all(workers);
 }
 
 // Resolved markets since a date. Prefer slower-resolving markets (politics, macro)
@@ -203,19 +228,26 @@ export async function buildWalletBetsDeep({ marketLimit = 150, maxWallets = 80, 
 }
 
 // High-level: build the wallet→bets map across many resolved markets.
-export async function buildWalletBets({ sinceISO, marketLimit = 300, throttleMs = 80 } = {}) {
+export async function buildWalletBets({ sinceISO, marketLimit = 300, concurrency = 6 } = {}) {
+  const t0 = Date.now();
+  console.log(`Fetching resolved markets (up to ${marketLimit})…`);
   const markets = await getResolvedMarkets({ sinceISO, limit: marketLimit });
+  console.log(`  ${markets.length} resolved markets — pulling trades (${concurrency}-way concurrent)…`);
+
   const walletBets = new Map();
-  for (const m of markets) {
-    let trades;
-    try { trades = await getMarketTrades(m.conditionId); }
-    catch { continue; }
+  await mapLimit(markets, concurrency, async (m) => {
+    const trades = await getMarketTrades(m.conditionId).catch(() => []);
     for (const bet of toBets(trades, m)) {
-      const arr = walletBets.get(bet.wallet) ?? [];
+      const arr = walletBets.get(bet.wallet) ?? [];   // sync get→set → safe under concurrency
       arr.push(bet);
       walletBets.set(bet.wallet, arr);
     }
-    await new Promise((r) => setTimeout(r, throttleMs));
-  }
+  }, (done, total) => {
+    if (done % 100 === 0 || done === total) {
+      const elapsed = (Date.now() - t0) / 1000;
+      const eta = (total - done) / (done / elapsed || 1);
+      console.log(`  …${done}/${total} markets · ${walletBets.size} wallets · ${elapsed.toFixed(0)}s · ~${eta.toFixed(0)}s left`);
+    }
+  });
   return walletBets;
 }

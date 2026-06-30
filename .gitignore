@@ -4,4 +4,5 @@ paper-positions.json
 seen-trades.json
 walkforward-report.json
 walkforward-report.txt
+wallet-bets-cache.json
 *.log

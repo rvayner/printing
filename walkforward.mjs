@@ -11,7 +11,7 @@
 // necessary evidence — still NOT a guarantee of future profit (edges decay, and
 // once you trade you add competition). A FAIL = do not deploy real money. Period.
 
-import { writeFileSync } from 'node:fs';
+import { writeFileSync, existsSync, readFileSync } from 'node:fs';
 import { CONFIG } from './config.mjs';
 import { validateWallets } from './src/skill.mjs';
 import { scoreFromProfile } from './src/score.mjs';
@@ -50,10 +50,16 @@ function synthData() {
 
 async function realData() {
   const { buildWalletBets, buildWalletBetsDeep } = await import('./src/polymarket.mjs');
-  if (has('deep')) {
-    return buildWalletBetsDeep({ marketLimit: Number(arg('markets', 150)), maxWallets: Number(arg('wallets', 80)) });
+  const cachePath = new URL('./wallet-bets-cache.json', import.meta.url).pathname;
+  if (has('cache') && existsSync(cachePath)) {
+    console.log('Loading wallet bets from cache (delete wallet-bets-cache.json to re-pull).');
+    return new Map(JSON.parse(readFileSync(cachePath)));
   }
-  return buildWalletBets({ sinceISO: arg('since', '2026-01-01'), marketLimit: Number(arg('markets', 400)) });
+  const wb = has('deep')
+    ? await buildWalletBetsDeep({ marketLimit: Number(arg('markets', 150)), maxWallets: Number(arg('wallets', 80)) })
+    : await buildWalletBets({ sinceISO: arg('since', '2026-01-01'), marketLimit: Number(arg('markets', 400)) });
+  if (has('cache')) { writeFileSync(cachePath, JSON.stringify([...wb])); console.log(`Cached ${wb.size} wallets → wallet-bets-cache.json`); }
+  return wb;
 }
 
 // ---- walk-forward ----
