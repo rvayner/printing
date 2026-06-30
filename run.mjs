@@ -51,6 +51,21 @@ console.log('\nFollow backtest (out-of-sample):', bt.follows
   ? `${bt.follows} follows, win ${(bt.winRate*100).toFixed(0)}%, avg ${(bt.avgPnlPerFollow*100>=0?'+':'')}${(bt.avgPnlPerFollow*100).toFixed(1)}¢/follow`
   : 'no wallet ever cleared the bar (no validated edge to follow).');
 
+// Build scoring profiles (overall + per-category + median size) for signals.mjs.
+const median = (a) => { const s = [...a].sort((x, y) => x - y); return s[Math.floor(s.length / 2)] || 0; };
+const profileOf = (bets) => ({
+  n: bets.length,
+  edgePerBet: bets.reduce((s, b) => s + (b.won - b.cost), 0) / bets.length,
+  variance: bets.reduce((s, b) => s + b.cost * (1 - b.cost), 0),
+  medianSize: median(bets.map((b) => b.size || 0)),
+});
+function buildProfile(wallet) {
+  const bets = walletBets.get(wallet) || [];
+  const cats = {};
+  for (const b of bets) (cats[b.category || 'other'] ??= []).push(b);
+  return { overall: profileOf(bets), cats: Object.fromEntries(Object.entries(cats).map(([c, bb]) => [c, profileOf(bb)])) };
+}
+
 // Persist validated wallets ONLY if the evidence actually supports following.
 const safeToFollow = gate.validated.length > 0 && persist.ok && persist.persists
   && bt.follows > 0 && bt.avgPnlPerFollow > 0;
@@ -60,7 +75,10 @@ writeFileSync(outPath, JSON.stringify({
   safeToFollow,
   persistence: persist,
   backtest: bt,
-  wallets: gate.validated.map((w) => ({ wallet: w.wallet, n: w.n, z: w.z, edgePerBet: w.pnlPerBet, roi: w.roi })),
+  wallets: gate.validated.map((w) => ({
+    wallet: w.wallet, n: w.n, z: w.z, edgePerBet: w.pnlPerBet, roi: w.roi,
+    profile: buildProfile(w.wallet),
+  })),
 }, null, 2));
 
 console.log(`\nSaved ${gate.validated.length} validated wallet(s) → ${outPath}`);

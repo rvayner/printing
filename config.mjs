@@ -13,4 +13,8 @@ export const CONFIG = {
   POLL_MS: 30000,            // how often to poll each validated wallet
   MIN_LIQUIDITY: 1000,       // skip illiquid markets you can't actually fill
   WEBHOOK_URL: process.env.WEBHOOK_URL || null, // optional Discord/Slack/Telegram
+  // Signal scoring + surge:
+  MIN_SCORE: 60,             // only alert/paper-trade signals scoring ≥ this (0-100)
+  SURGE_WINDOW_MS: 6 * 3600 * 1000, // window to detect converging validated wallets
+  SURGE_MIN_WALLETS: 2,      // distinct validated wallets on same outcome = surge
 };

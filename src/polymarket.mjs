@@ -36,6 +36,7 @@ export async function getResolvedMarkets({ sinceISO, limit = 500 } = {}) {
         conditionId: m.conditionId,
         question: m.question,
         endDate: m.endDate,
+        category: m.category || 'other',
         tokenIds: JSON.parse(m.clobTokenIds || '[]'),
         winningTokenIndex: winIdx,         // 0 or 1 (Yes/No order from `outcomes`)
         liquidity: Number(m.liquidity || 0),
@@ -70,6 +71,7 @@ export function toBets(trades, market) {
       cost: t.price,                      // their implied prob = price paid
       won,
       size: t.size,
+      category: market.category,
     });
   }
   return out;
@@ -101,6 +103,7 @@ export async function getMarketState(conditionId) {
   return {
     conditionId,
     question: m.question,
+    category: m.category || 'other',
     open: m.active === true && m.closed !== true,
     endDate: m.endDate ? Date.parse(m.endDate) : null,
     liquidity: Number(m.liquidity || m.liquidityNum || 0),

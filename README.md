@@ -82,6 +82,25 @@ node paper-reconcile.mjs
 (variance), and only surfaces over thousands. 300 trades ≈ −3%; 4000 ≈ +9%. Do not
 trust a paper record until it has hundreds-to-thousands of closed trades.
 
+## The scoring algorithm (signal quality, not just "a whale bet")
+
+Every live signal is scored 0-100 before it alerts you (`src/score.mjs`):
+- **Proven edge** (40%) — lower bound of a 95% CI on the wallet's true edge.
+  Statistically significant or it scores ~0.
+- **Category fit** (20%) — the wallet's edge *in this market's category* (a
+  politics specialist scores low on a crypto bet).
+- **Conviction** (20%) — bet size vs the wallet's own median AND vs market depth.
+- **Entry quality** (20%) — can you still buy near the whale's price?
+
+Only signals ≥ `MIN_SCORE` (default 60) alert/paper-trade. A **surge** (🚨) fires
+when ≥2 validated wallets converge on the same outcome — the strongest signal.
+
+```bash
+# Prove scoring beats naive "follow everything" (no network):
+node algo-sim.mjs
+# typical: SCORED ~2x the ROI of NAIVE on fewer trades + smaller drawdown
+```
+
 ## Automate it (run unattended)
 
 ```bash
