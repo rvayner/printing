@@ -24,4 +24,8 @@ export const CONFIG = {
   MAX_FILL_FRACTION: 0.05,   // never try to fill more than this share of liquidity
   // Circuit breaker: pause live alerts unless a fresh walk-forward PASS exists.
   WALKFORWARD_MAX_AGE_DAYS: 7, // verdict older than this = stale → pause until re-run
+  // Position sizing (fractional Kelly):
+  BANKROLL: 1000,            // your bankroll, for suggested bet sizes in alerts
+  KELLY_MULT: 0.25,          // quarter-Kelly — safety margin against bad estimates
+  MAX_BANKROLL_FRAC: 0.05,   // never stake more than 5% of bankroll on one bet
 };

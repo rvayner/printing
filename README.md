@@ -103,6 +103,14 @@ risk is suppressed automatically; MEDIUM is flagged in the alert.
 **Exit signals:** when a wallet you followed SELLS the outcome, you get a 🔻 EXIT
 alert and the paper position closes at their sell price — so you know to get out too.
 
+**Position sizing (src/sizing.mjs):** alerts include a suggested $ size via fractional
+(¼) Kelly on the conservative edge, capped at `MAX_BANKROLL_FRAC` and the liquidity
+fill cap. `kelly-sim.mjs` shows the honest case: under edge decay, flat sizing ruins
+~15% of the time vs ~4% for Kelly — sizing is about SURVIVAL, not bigger mean returns.
+
+**Circuit breaker (src/breaker.mjs):** live alerts auto-pause if the daily walk-forward
+flips to FAIL or goes stale (>7 days). The bot can't keep signaling a decayed edge.
+
 ```bash
 # Prove scoring beats naive "follow everything" (no network):
 node algo-sim.mjs

@@ -18,6 +18,7 @@ import { scoreFromProfile } from './src/score.mjs';
 import { SurgeTracker } from './src/surge.mjs';
 import { verifySignal } from './src/verify.mjs';
 import { checkBreaker } from './src/breaker.mjs';
+import { kellyStake } from './src/sizing.mjs';
 
 const DEMO = process.argv.includes('--demo');
 const PAPER = process.argv.includes('--paper');
@@ -49,7 +50,7 @@ async function evaluateSignal(trade, getState, getAsk) {
   return { follow: true, market: m, hoursLeft, maxEntry, ask };
 }
 
-function formatAlert(trade, ev, sc, surge, vr) {
+function formatAlert(trade, ev, sc, surge, vr, suggestedSize) {
   const ci = sc.edgeCI;
   const ageMin = trade.time ? Math.round((Date.now() - trade.time) / 60000) : null;
   const lines = [
@@ -61,6 +62,7 @@ function formatAlert(trade, ev, sc, surge, vr) {
     `   on this trade: ${surge?.count ?? 1} validated wallet(s)${surge?.surge ? ' ⚡ CONVERGING' : ''}`,
     `   wallet edge ${(ci.edgePerBet*100).toFixed(1)}¢  95% CI [${(ci.lo*100).toFixed(1)}, ${(ci.hi*100).toFixed(1)}]¢ (n=${ci.n})`,
     `   live ask ${(ev.ask*100).toFixed(0)}¢  →  LIMIT BUY ≤ ${(ev.maxEntry*100).toFixed(0)}¢${sc.niche.isNiche ? `  ·  ⚠ NICHE: max size ~$${sc.niche.maxSize}` : ''}`,
+    `   💰 suggested size ~$${(suggestedSize ?? 0).toFixed(0)}  (¼-Kelly of $${CONFIG.BANKROLL} bankroll)`,
     `   liquidity $${ev.market.liquidity.toFixed(0)}  ·  ${ev.market.category}  ·  ${ev.hoursLeft.toFixed(1)}h to resolve`,
   ];
   if (vr && vr.risk !== 'LOW') lines.push(`   ⚠ manipulation check: ${vr.risk} — ${vr.flags.join('; ')}`);
@@ -111,7 +113,9 @@ async function pollOnce(wallets, seen, fetchers) {
         continue;
       }
 
-      await notify(formatAlert(t, ev, sc, surge, vr));
+      const kEdge = Math.max(0, (sc.categoryCI?.lo ?? sc.edgeCI.lo) - CONFIG.MAX_ENTRY_SLIPPAGE);
+      const suggestedSize = kellyStake({ bankroll: CONFIG.BANKROLL, price: ev.maxEntry, edgeLo: kEdge, liquidity: ev.market.liquidity });
+      await notify(formatAlert(t, ev, sc, surge, vr, suggestedSize));
       if (paperBook) {
         paperBook.open({ id: t.id, wallet: t.wallet, marketId: t.conditionId,
           question: ev.market.question, side: `outcome[${t.outcomeIndex}]`, outcomeIndex: t.outcomeIndex,
