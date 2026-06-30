@@ -58,10 +58,25 @@ export class PaperBook {
     return n;
   }
 
+  // Close early because the followed wallet SOLD — exit at their sell price.
+  exitAt({ wallet, marketId, outcomeIndex, price }) {
+    let n = 0;
+    for (const p of this.positions) {
+      if (p.status === 'open' && p.wallet === wallet && p.marketId === marketId && p.outcomeIndex === outcomeIndex) {
+        p.status = 'exited';
+        p.exitPrice = price;
+        p.pnl = p.shares * price - p.stake;     // sold `shares` at `price`
+        n++;
+      }
+    }
+    if (n) this._save();
+    return n;
+  }
+
   _save() { if (this.path) writeFileSync(this.path, JSON.stringify(this.positions, null, 2)); }
 
   report() {
-    const closed = this.positions.filter((p) => p.status === 'closed');
+    const closed = this.positions.filter((p) => p.status === 'closed' || p.status === 'exited');
     const open = this.positions.filter((p) => p.status === 'open');
     const wins = closed.filter((p) => p.pnl > 0).length;
     const staked = closed.reduce((s, p) => s + p.stake, 0);

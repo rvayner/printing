@@ -17,8 +17,6 @@ export class SurgeTracker {
     if (!arr.some((h) => h.wallet === wallet)) arr.push({ wallet, time });
     this.hits.set(key, arr);
     const wallets = [...new Set(arr.map((h) => h.wallet))];
-    return wallets.length >= this.minWallets
-      ? { surge: true, wallets, count: wallets.length, marketId, outcomeIndex }
-      : { surge: false };
+    return { surge: wallets.length >= this.minWallets, wallets, count: wallets.length, marketId, outcomeIndex };
   }
 }

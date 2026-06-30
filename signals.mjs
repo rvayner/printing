@@ -16,6 +16,7 @@ import { PaperBook } from './src/paper.mjs';
 import { sendAlert, configuredChannels } from './src/notify.mjs';
 import { scoreFromProfile } from './src/score.mjs';
 import { SurgeTracker } from './src/surge.mjs';
+import { verifySignal } from './src/verify.mjs';
 
 const DEMO = process.argv.includes('--demo');
 const PAPER = process.argv.includes('--paper');
@@ -47,7 +48,7 @@ async function evaluateSignal(trade, getState, getAsk) {
   return { follow: true, market: m, hoursLeft, maxEntry, ask };
 }
 
-function formatAlert(trade, ev, sc, surge) {
+function formatAlert(trade, ev, sc, surge, vr) {
   const ci = sc.edgeCI;
   const ageMin = trade.time ? Math.round((Date.now() - trade.time) / 60000) : null;
   const lines = [
@@ -56,12 +57,14 @@ function formatAlert(trade, ev, sc, surge) {
     `   wallet ${trade.wallet.slice(0, 10)}…  BUY outcome[${trade.outcomeIndex}] @ ${(trade.price*100).toFixed(0)}¢  size $${trade.size.toFixed(0)}${ageMin != null ? `  (${ageMin}m ago)` : ''}`,
     `   insider-confidence: ${sc.insider.tier} — ${sc.insider.note}`,
     `   urgency: ${sc.urgency.level} — ${sc.urgency.reason}`,
+    `   on this trade: ${surge?.count ?? 1} validated wallet(s)${surge?.surge ? ' ⚡ CONVERGING' : ''}`,
     `   wallet edge ${(ci.edgePerBet*100).toFixed(1)}¢  95% CI [${(ci.lo*100).toFixed(1)}, ${(ci.hi*100).toFixed(1)}]¢ (n=${ci.n})`,
     `   live ask ${(ev.ask*100).toFixed(0)}¢  →  LIMIT BUY ≤ ${(ev.maxEntry*100).toFixed(0)}¢${sc.niche.isNiche ? `  ·  ⚠ NICHE: max size ~$${sc.niche.maxSize}` : ''}`,
     `   liquidity $${ev.market.liquidity.toFixed(0)}  ·  ${ev.market.category}  ·  ${ev.hoursLeft.toFixed(1)}h to resolve`,
-    `   ⚖ ${sc.reality}`,
   ];
-  if (surge?.surge) lines.push(`   ⚡ ${surge.count} validated wallets converging on this outcome`);
+  if (vr && vr.risk !== 'LOW') lines.push(`   ⚠ manipulation check: ${vr.risk} — ${vr.flags.join('; ')}`);
+  else if (vr) lines.push('   ✅ manipulation check: clean (not a price swing)');
+  lines.push(`   ⚖ ${sc.reality}`);
   return lines.join('\n');
 }
 
@@ -74,6 +77,17 @@ async function pollOnce(wallets, seen, fetchers) {
     for (const t of trades) {
       if (seen.has(t.id)) continue;
       seen.add(t.id);
+
+      // SELL by a wallet we follow = EXIT signal (they're getting out).
+      if (t.side === 'SELL') {
+        const closed = paperBook ? paperBook.exitAt({ wallet: t.wallet, marketId: t.conditionId, outcomeIndex: t.outcomeIndex, price: t.price }) : 0;
+        if (closed) {
+          await notify(`🔻 EXIT — ${t.wallet.slice(0, 10)}… SOLD outcome[${t.outcomeIndex}] @ ${(t.price * 100).toFixed(0)}¢\n   A wallet you followed is OUT. Consider selling your position too.`);
+          alerts++;
+        }
+        continue;
+      }
+
       // eslint-disable-next-line no-await-in-loop
       const ev = await evaluateSignal(t, fetchers.state, fetchers.ask);
       if (!ev.follow) continue;
@@ -89,7 +103,14 @@ async function pollOnce(wallets, seen, fetchers) {
       if (sc.score < CONFIG.MIN_SCORE) continue;        // too weak — skip
 
       const surge = surgeTracker.add({ marketId: t.conditionId, outcomeIndex: t.outcomeIndex, wallet: t.wallet });
-      await notify(formatAlert(t, ev, sc, surge));
+      const vr = verifySignal({ walletRecentTrades: trades, marketId: t.conditionId,
+        betSize: t.size, marketLiquidity: ev.market.liquidity, surgeCount: surge.count });
+      if (vr.risk === 'HIGH') {                          // looks like a price swing — don't follow
+        console.log(`   ⛔ suppressed (manipulation risk: ${vr.flags.join('; ')})`);
+        continue;
+      }
+
+      await notify(formatAlert(t, ev, sc, surge, vr));
       if (paperBook) {
         paperBook.open({ id: t.id, wallet: t.wallet, marketId: t.conditionId,
           question: ev.market.question, side: `outcome[${t.outcomeIndex}]`, outcomeIndex: t.outcomeIndex,

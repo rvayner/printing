@@ -95,6 +95,14 @@ Every live signal is scored 0-100 before it alerts you (`src/score.mjs`):
 Only signals ≥ `MIN_SCORE` (default 60) alert/paper-trade. A **surge** (🚨) fires
 when ≥2 validated wallets converge on the same outcome — the strongest signal.
 
+**Anti-manipulation (src/verify.mjs):** every signal is checked for price-*swinging*
+— round-tripping (bought AND sold the same market), price-impact (bet too big vs
+liquidity, moved the price itself), and isolation (no corroborating wallets). HIGH
+risk is suppressed automatically; MEDIUM is flagged in the alert.
+
+**Exit signals:** when a wallet you followed SELLS the outcome, you get a 🔻 EXIT
+alert and the paper position closes at their sell price — so you know to get out too.
+
 ```bash
 # Prove scoring beats naive "follow everything" (no network):
 node algo-sim.mjs
