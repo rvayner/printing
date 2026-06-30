@@ -6,3 +6,4 @@ walkforward-report.json
 walkforward-report.txt
 wallet-bets-cache.json
 *.log
+roster.json

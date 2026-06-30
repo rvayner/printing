@@ -143,6 +143,7 @@ export function toBets(trades, market) {
     out.push({
       wallet: t.wallet,
       marketId: market.conditionId,
+      outcomeIndex: t.tokenIndex,         // which side — needed to detect consensus
       time: t.time,
       cost: t.price,                      // their implied prob = price paid
       won,

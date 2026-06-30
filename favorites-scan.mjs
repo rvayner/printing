@@ -9,6 +9,7 @@
 import { CONFIG } from './config.mjs';
 import { getActiveMarkets } from './src/polymarket.mjs';
 import { kellyStake } from './src/sizing.mjs';
+import { PaperBook } from './src/paper.mjs';
 
 const arg = (k, d) => { const i = process.argv.indexOf(`--${k}`); return i >= 0 ? Number(process.argv[i + 1]) : d; };
 const has = (k) => process.argv.includes(`--${k}`);
@@ -55,6 +56,19 @@ for (const p of top) {
 
 console.log('Strategy: buy these favorites, hold to resolution, diversify across MANY (negative');
 console.log('skew → spread risk). Edge is +9% historically; size with Kelly; never all-in on one.');
+
+// Paper-trade the picks (diversify across MANY — negative skew). paper-reconcile
+// closes them at resolution and tracks the real scorecard.
+if (has('paper') && top.length) {
+  const book = new PaperBook(new URL('./paper-positions.json', import.meta.url).pathname);
+  let opened = 0;
+  for (const p of top) {
+    if (book.open({ id: `fav-${p.conditionId}-${p.favIndex}`, wallet: 'FAVORITES', marketId: p.conditionId,
+      question: p.question, side: `outcome[${p.favIndex}]`, outcomeIndex: p.favIndex,
+      entry: p.entry, resolveTime: p.endDate, stake: Math.max(10, p.size) })) opened++;
+  }
+  console.log(`\n📝 opened ${opened} new paper positions (run paper-reconcile.mjs to settle).`);
+}
 
 if (has('notify') && top.length) {
   const { sendAlert } = await import('./src/notify.mjs');

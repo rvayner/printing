@@ -18,6 +18,16 @@ module.exports = {
       restart_delay: 5000,
     },
     {
+      // PRIMARY STRATEGY: scan favorites (the proven +9% edge) daily, paper-trade + alert
+      name: 'favorites-scan',
+      script: 'favorites-scan.mjs',
+      args: '--top 30 --paper --notify',
+      node_args: '--env-file=.env',
+      cwd: __dirname,
+      autorestart: false,
+      cron_restart: '0 13 * * *',
+    },
+    {
       // interactive Telegram commands (/stats, /top) — always on
       name: 'whale-commands',
       script: 'bot-commands.mjs',
