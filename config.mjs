@@ -28,4 +28,9 @@ export const CONFIG = {
   BANKROLL: 1000,            // your bankroll, for suggested bet sizes in alerts
   KELLY_MULT: 0.25,          // quarter-Kelly — safety margin against bad estimates
   MAX_BANKROLL_FRAC: 0.05,   // never stake more than 5% of bankroll on one bet
+  // Diversification guard (favorites have negative skew → correlation is the risk):
+  MAX_PER_EVENT: 1,          // at most this many positions per Polymarket event
+  MAX_CATEGORY_FRAC: 0.30,   // ≤30% of bankroll in any one category
+  MAX_DEPLOYED_FRAC: 0.50,   // deploy ≤50% of bankroll at once (keep dry powder)
+  MAX_POSITIONS: 40,         // total concurrent positions cap
 };

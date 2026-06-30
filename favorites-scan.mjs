@@ -10,6 +10,7 @@ import { CONFIG } from './config.mjs';
 import { getActiveMarkets } from './src/polymarket.mjs';
 import { kellyStake } from './src/sizing.mjs';
 import { PaperBook } from './src/paper.mjs';
+import { diversify } from './src/diversify.mjs';
 
 const arg = (k, d) => { const i = process.argv.indexOf(`--${k}`); return i >= 0 ? Number(process.argv[i + 1]) : d; };
 const has = (k) => process.argv.includes(`--${k}`);
@@ -43,9 +44,12 @@ for (const m of markets) {
 }
 
 picks.sort((a, b) => b.edge - a.edge);
-const top = picks.slice(0, TOP);
+const { selected, skipped, deployed, byCategory, bankroll } = diversify(picks);
+const top = selected.slice(0, TOP);
 
-console.log(`── ${picks.length} favorites in ${(LO * 100).toFixed(0)}-${(HI * 100).toFixed(0)}¢ band (top ${top.length}) ──\n`);
+console.log(`── ${picks.length} favorites in ${(LO * 100).toFixed(0)}-${(HI * 100).toFixed(0)}¢ band · ${selected.length} pass diversification (showing ${top.length}) ──`);
+console.log(`   deployed ~$${deployed.toFixed(0)}/${bankroll} (${(deployed / bankroll * 100).toFixed(0)}%) · skipped ${skipped.event} same-event, ${skipped.category} category-cap, ${skipped.deployed} deploy-cap`);
+console.log(`   spread: ${[...byCategory.entries()].map(([c, s]) => `${c} $${s.toFixed(0)}`).join(' · ')}\n`);
 const lines = [];
 for (const p of top) {
   const l = `${(p.favPrice * 100).toFixed(0)}¢ "${(p.favName || '').slice(0, 24)}" — ${p.question.slice(0, 60)}`
@@ -59,15 +63,15 @@ console.log('skew → spread risk). Edge is +9% historically; size with Kelly; n
 
 // Paper-trade the picks (diversify across MANY — negative skew). paper-reconcile
 // closes them at resolution and tracks the real scorecard.
-if (has('paper') && top.length) {
+if (has('paper') && selected.length) {
   const book = new PaperBook(new URL('./paper-positions.json', import.meta.url).pathname);
   let opened = 0;
-  for (const p of top) {
+  for (const p of selected) {                      // the diversified portfolio
     if (book.open({ id: `fav-${p.conditionId}-${p.favIndex}`, wallet: 'FAVORITES', marketId: p.conditionId,
       question: p.question, side: `outcome[${p.favIndex}]`, outcomeIndex: p.favIndex,
-      entry: p.entry, resolveTime: p.endDate, stake: Math.max(10, p.size) })) opened++;
+      entry: p.entry, resolveTime: p.endDate, stake: p.stake })) opened++;
   }
-  console.log(`\n📝 opened ${opened} new paper positions (run paper-reconcile.mjs to settle).`);
+  console.log(`\n📝 opened ${opened} new diversified paper positions (run paper-reconcile.mjs to settle).`);
 }
 
 if (has('notify') && top.length) {

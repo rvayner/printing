@@ -68,6 +68,18 @@ export async function getResolvedMarkets({ sinceISO, limit = 500 } = {}) {
 // High-frequency crypto / hourly markets — HFT-bot noise, not informed events.
 const HIGH_FREQ = /up or down|\b\d{1,2}(:\d{2})?\s?(am|pm)\b|hourly|every hour|\b(5|10|15)[- ]?min/i;
 
+// Gamma rarely populates `category`, so derive a real one from the question for
+// meaningful diversification (correlated bets cluster by topic).
+export function categorize(q = '') {
+  const s = q.toLowerCase();
+  if (/bitcoin|btc|ethereum|\beth\b|crypto|solana|\bsol\b|token|tvl|fdv|aave|defi|stablecoin|airdrop/.test(s)) return 'crypto';
+  if (/senate|president|election|nominee|governor|congress|democrat|republican|primary|parliament|prime minister|mayor|vote/.test(s)) return 'politics';
+  if (/russia|ukraine|israel|gaza|\bwar\b|capture|ceasefire|nuclear|invade|hostage|troops/.test(s)) return 'geopolitics';
+  if (/inflation|\bgdp\b|interest rate|\bfed\b|unemployment|recession|market cap|price.*between|rate cut/.test(s)) return 'econ';
+  if (/ vs\.? | o\/u |over|under|goals|wins|match|league|\bcup\b|tournament|nba|\bnfl\b|wimbledon|tennis|soccer|football|series/.test(s)) return 'sports';
+  return 'other';
+}
+
 // Currently OPEN markets with their favorite (highest-priced) outcome — for the
 // live favorites scanner. Ranked by volume so the liquid ones come first.
 export async function getActiveMarkets({ limit = 800 } = {}) {
@@ -89,7 +101,8 @@ export async function getActiveMarkets({ limit = 800 } = {}) {
       if (prices.length < 2) continue;
       const favIndex = prices.indexOf(Math.max(...prices));
       out.push({
-        conditionId: m.conditionId, question: m.question, category: m.category || 'other',
+        conditionId: m.conditionId, question: m.question, category: categorize(m.question),
+        eventSlug: m.eventSlug || (Array.isArray(m.events) && m.events[0]?.slug) || m.conditionId,
         favIndex, favPrice: prices[favIndex], favName: outcomes[favIndex] || `outcome[${favIndex}]`,
         liquidity: Number(m.liquidity || m.liquidityNum || 0),
         endDate: m.endDate ? Date.parse(m.endDate) : null,
