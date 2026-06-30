@@ -18,6 +18,16 @@ module.exports = {
       restart_delay: 5000,
     },
     {
+      // interactive Telegram commands (/stats, /top) — always on
+      name: 'whale-commands',
+      script: 'bot-commands.mjs',
+      node_args: '--env-file=.env',
+      cwd: __dirname,
+      autorestart: true,
+      max_restarts: 100,
+      restart_delay: 5000,
+    },
+    {
       // close settled paper positions + refresh scorecard, every 30 min
       name: 'whale-reconcile',
       script: 'paper-reconcile.mjs',

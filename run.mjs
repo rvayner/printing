@@ -11,6 +11,7 @@ import { buildWalletBets } from './src/polymarket.mjs';
 import { validateWallets } from './src/skill.mjs';
 import { persistenceTest } from './src/persistence.mjs';
 import { followBacktest } from './src/backtest.mjs';
+import { categoryLeaderboards, formatLeaderboards } from './src/leaderboard.mjs';
 
 const arg = (k, d) => { const i = process.argv.indexOf(`--${k}`); return i >= 0 ? process.argv[i + 1] : d; };
 const sinceISO = arg('since', '2026-01-01');
@@ -69,16 +70,24 @@ function buildProfile(wallet) {
 // Persist validated wallets ONLY if the evidence actually supports following.
 const safeToFollow = gate.validated.length > 0 && persist.ok && persist.persists
   && bt.follows > 0 && bt.avgPnlPerFollow > 0;
+const walletsWithProfiles = gate.validated.map((w) => ({
+  wallet: w.wallet, n: w.n, z: w.z, edgePerBet: w.pnlPerBet, roi: w.roi,
+  profile: buildProfile(w.wallet),
+}));
+
+// Per-category specialist leaderboards
+const boards = categoryLeaderboards(walletsWithProfiles);
+console.log('\n──── Category specialists (ranked by proven edge) ────');
+console.log(formatLeaderboards(boards));
+
 const outPath = new URL('./validated-wallets.json', import.meta.url).pathname;
 writeFileSync(outPath, JSON.stringify({
   generatedAt: new Date().toISOString(),
   safeToFollow,
   persistence: persist,
   backtest: bt,
-  wallets: gate.validated.map((w) => ({
-    wallet: w.wallet, n: w.n, z: w.z, edgePerBet: w.pnlPerBet, roi: w.roi,
-    profile: buildProfile(w.wallet),
-  })),
+  leaderboards: boards,
+  wallets: walletsWithProfiles,
 }, null, 2));
 
 console.log(`\nSaved ${gate.validated.length} validated wallet(s) → ${outPath}`);
