@@ -17,6 +17,7 @@ import { sendAlert, configuredChannels } from './src/notify.mjs';
 import { scoreFromProfile } from './src/score.mjs';
 import { SurgeTracker } from './src/surge.mjs';
 import { verifySignal } from './src/verify.mjs';
+import { checkBreaker } from './src/breaker.mjs';
 
 const DEMO = process.argv.includes('--demo');
 const PAPER = process.argv.includes('--paper');
@@ -172,7 +173,19 @@ const channels = configuredChannels();
 console.log(`Watching ${meta.wallets.length} validated wallet(s)${DEMO ? ' [DEMO]' : ''}, polling every ${CONFIG.POLL_MS/1000}s.`);
 console.log(channels.length ? `Alerts → console + ${channels.join(' + ')}.` : 'Alerts → console (set TELEGRAM_BOT_TOKEN/CHAT_ID or DISCORD_WEBHOOK_URL for push).');
 
+let breakerNotified = null;
 const tick = async () => {
+  if (!DEMO) {
+    const b = checkBreaker();
+    if (b.tripped) {
+      if (breakerNotified !== true) { await sendAlert(`⛔ CIRCUIT BREAKER — ${b.reason}. Live alerts PAUSED until a fresh walk-forward PASS.`); breakerNotified = true; }
+      console.log(`Circuit breaker tripped: ${b.reason} — alerts paused.`);
+      return;
+    }
+    if (breakerNotified === true) await sendAlert(`✅ Circuit breaker cleared — ${b.reason}. Alerts resumed.`);
+    if (b.untested) console.log(`⚠ ${b.reason}`);
+    breakerNotified = false;
+  }
   const n = await pollOnce(meta.wallets, seen, fetchers);
   if (DEMO) console.log(`\nDemo poll complete: ${n} actionable signal(s) fired above.`);
 };

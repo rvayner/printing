@@ -22,4 +22,6 @@ export const CONFIG = {
   SOON_HOURS: 12,            // market resolving within this is time-sensitive
   NICHE_LIQUIDITY: 15000,    // below this = niche/obscure (informed-likely but thin)
   MAX_FILL_FRACTION: 0.05,   // never try to fill more than this share of liquidity
+  // Circuit breaker: pause live alerts unless a fresh walk-forward PASS exists.
+  WALKFORWARD_MAX_AGE_DAYS: 7, // verdict older than this = stale → pause until re-run
 };

@@ -46,5 +46,15 @@ module.exports = {
       autorestart: false,
       cron_restart: '0 6 * * *',
     },
+    {
+      // daily walk-forward → writes the verdict the circuit breaker reads
+      name: 'whale-walkforward',
+      script: 'walkforward.mjs',
+      args: '--since 2026-01-01 --markets 400 --report --notify',
+      node_args: '--env-file=.env',
+      cwd: __dirname,
+      autorestart: false,
+      cron_restart: '30 6 * * *',
+    },
   ],
 };
