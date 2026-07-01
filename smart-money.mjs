@@ -15,10 +15,14 @@ import { getRecentTrades, getWalletActivity, categorize } from './src/polymarket
 import { kellyStake } from './src/sizing.mjs';
 import { PaperBook } from './src/paper.mjs';
 import { sendAlert, configuredChannels } from './src/notify.mjs';
+import { insiderScore } from './src/insider.mjs';
 
 const has = (k) => process.argv.includes(`--${k}`);
+const arg = (k, d) => { const i = process.argv.indexOf(`--${k}`); return i >= 0 ? Number(process.argv[i + 1]) : d; };
 const ONCE = has('once');
 const PAPER = has('paper');
+const FRESH_ONLY = has('fresh-only');   // hard filter: only new-account insiders
+const MIN_SCORE = arg('min-score', 3);
 const seen = new Set();
 const paperBook = PAPER ? new PaperBook(new URL('./paper-positions.json', import.meta.url).pathname) : null;
 const SLIP = CONFIG.MAX_ENTRY_SLIPPAGE;
@@ -32,27 +36,29 @@ async function poll() {
   for (const t of trades) {
     if (seen.has(t.id)) continue;
     seen.add(t.id);
-    // validated insider signal: BIG bet on an UNCERTAIN, NON-SPORTS event market
-    if (t.side !== 'BUY') continue;
-    if (t.notional < CONFIG.SMART_MIN_USD) continue;
+    // cheap pre-filters before the (costlier) wallet-freshness lookup
+    if (t.side !== 'BUY' || t.notional < CONFIG.SMART_MIN_USD) continue;
     if (t.price < CONFIG.SMART_LO || t.price > CONFIG.SMART_HI) continue;
     const cat = categorize(t.title);
-    if (CONFIG.SMART_EXCLUDE.includes(cat)) continue;  // skip sports/crypto (no insider edge)
+    if (CONFIG.SMART_EXCLUDE.includes(cat)) continue;  // no insider edge in sports/crypto
 
-    // fresh-wallet check — the documented insider signature (new account, big bet)
-    let fresh = false;
-    try { const act = await getWalletActivity(t.wallet, { limit: CONFIG.SMART_FRESH_TRADES + 5 }); fresh = act.length <= CONFIG.SMART_FRESH_TRADES; }
-    catch { /* ignore */ }
+    // wallet freshness — the documented insider signature (new account)
+    let walletTradeCount = null;
+    try { walletTradeCount = (await getWalletActivity(t.wallet, { limit: CONFIG.SMART_FRESH_TRADES + 5 })).length; }
+    catch { /* unknown */ }
+
+    const sig = insiderScore({ notional: t.notional, price: t.price, category: cat, walletTradeCount });
+    if (!sig.actionable || sig.score < MIN_SCORE) continue;   // must clear the z=3.1 bar
+    if (FRESH_ONLY && !sig.fresh) continue;                    // hard filter: new accounts only
 
     const entry = Math.min(0.95, t.price + SLIP);
-    const edge = 0.68 - entry;                          // ~68% win at this signal (non-sports uncertain)
-    const size = kellyStake({ bankroll: CONFIG.BANKROLL, price: entry, edgeLo: Math.max(0, edge), liquidity: t.notional * 5 });
+    const size = kellyStake({ bankroll: CONFIG.BANKROLL, price: entry, edgeLo: Math.max(0, sig.expWin - entry), liquidity: t.notional * 5 });
     const text = [
-      `${fresh ? '🔥 FRESH-WALLET INSIDER' : '💸 SMART MONEY'} — $${t.notional.toFixed(0)} @ ${(t.price * 100).toFixed(0)}¢ · ${cat}`,
+      `${sig.tier} — score ${sig.score}/5 · $${t.notional.toFixed(0)} @ ${(t.price * 100).toFixed(0)}¢ · ${cat}`,
       `   ${(t.title || '').slice(0, 70)}`,
-      `   "${(t.outcome || `outcome[${t.outcomeIndex}]`)}" · wallet ${t.wallet?.slice(0, 10)}…${fresh ? ' (NEW account ⚠)' : ''}`,
-      `   FOLLOW: buy ≤${(entry * 100).toFixed(0)}¢ · est win ~68% · size ~$${size.toFixed(0)}`,
-      `   ⚖ insider edge (+22% hist on uncertain political/event) — NOT a lock; act fast.`,
+      `   "${(t.outcome || `outcome[${t.outcomeIndex}]`)}" · wallet ${t.wallet?.slice(0, 10)}…${sig.fresh ? ` (FRESH: ${walletTradeCount} trades ⚠)` : ''}`,
+      `   FOLLOW: buy ≤${(entry * 100).toFixed(0)}¢ · est win ${(sig.expWin * 100).toFixed(0)}% · size ~$${size.toFixed(0)}`,
+      `   ⚖ statistically-validated insider signal — NOT a lock; act fast, price moves.`,
     ].join('\n');
     await sendAlert(text);
     if (paperBook) {
