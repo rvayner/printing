@@ -75,6 +75,7 @@ const channels = configuredChannels();
 console.log(`Smart-money tracker — big bets (≥$${CONFIG.SMART_MIN_USD}) on ${CONFIG.SMART_LO * 100}-${CONFIG.SMART_HI * 100}¢ markets.`);
 console.log(channels.length ? `Alerts → console + ${channels.join(' + ')}.` : 'Alerts → console (set Telegram for push).');
 
+const INTERVAL = arg('interval', 8) * 1000;   // near-real-time by default (8s)
 const tick = async () => { const n = await poll(); if (ONCE) console.log(`\nFound ${n} smart-money signal(s) this poll.`); };
 if (ONCE) { await tick(); }
-else { await tick(); setInterval(tick, CONFIG.POLL_MS); }
+else { console.log(`Polling every ${INTERVAL / 1000}s.`); await tick(); setInterval(tick, INTERVAL); }
