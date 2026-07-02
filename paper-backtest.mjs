@@ -12,6 +12,7 @@ import { sparkline } from './src/paper.mjs';
 
 const arg = (k, d) => { const i = process.argv.indexOf(`--${k}`); return i >= 0 ? Number(process.argv[i + 1]) : d; };
 const DAYS = arg('days', 120), B0 = arg('bankroll', 1000), SLIP = 0.03, STAKE_FRAC = 0.03;
+const MAXHOLD = arg('maxhold', 0);   // only trade favorites resolving within N days (0 = any)
 const cachePath = new URL('./wallet-bets-cache.json', import.meta.url).pathname;
 
 let wb;
@@ -34,6 +35,8 @@ let positions = [...byMarket.entries()].map(([marketId, g]) => {
 
 const maxT = positions.reduce((m, p) => Math.max(m, p.entry), 0);
 positions = positions.filter((p) => p.entry >= maxT - DAYS * 864e5);
+if (MAXHOLD) positions = positions.filter((p) => (p.exit - p.entry) <= MAXHOLD * 864e5);  // fast-resolving only
+if (!positions.length) { console.log(`\nNo favorites match (maxhold=${MAXHOLD}d too strict for this data — endDate overstates true resolution time).`); process.exit(0); }
 
 // capital-constrained chronological simulation
 let cash = B0, deployed = 0, peak = B0, maxDD = 0, opened = 0, wins = 0, closed = 0;
