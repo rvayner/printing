@@ -163,6 +163,7 @@ export function toBets(trades, market) {
       size: t.size,
       title: market.question,             // to categorize (sports vs political/event)
       category: market.category,
+      resolvedAt: market.endDate ? Date.parse(market.endDate) : t.time,  // recency
     });
   }
   return out;
