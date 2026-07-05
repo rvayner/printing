@@ -132,6 +132,49 @@ nohup node signals.mjs --paper > signals.log 2>&1 &
 `paper-reconcile.mjs` marks results every 30 min. Let it compound a track record
 for weeks before believing any number.
 
+## Running it 24/7 on an always-on Mac (paper mode) — resilience & recovery
+
+The favorites paper trade runs from cron. Activation (already done on this machine):
+
+```bash
+# in crontab -e  (uses the Node 22 nvm path):
+0 13 * * *  cd ~/Projects/oddpool-arb/whale-tracker && <node22> favorites-scan.mjs --top 20 --paper >> paper.log 2>&1
+30 */6 * * * cd ~/Projects/oddpool-arb/whale-tracker && <node22> paper-reconcile.mjs >> paper.log 2>&1
+```
+
+### Keep the Mac awake (critical — cron does NOT run during sleep)
+"Powered on" ≠ "awake." macOS sleeps after inactivity and cron jobs are skipped
+(not caught up). Make it permanent so it survives reboots:
+
+```bash
+sudo pmset -c sleep 0      # never sleep on power (run in the real Terminal app for the password)
+```
+Or GUI: System Settings → Battery → Options → "Prevent automatic sleeping on power
+adapter when display is off." Temporary stopgap (dies on reboot):
+`nohup caffeinate -i > /dev/null 2>&1 & disown`.
+
+### What happens on power loss / reboot / battery
+- **Open positions are safe** — saved in `paper-positions.json`, nothing lost.
+- **Cron auto-resumes on reboot** — the crontab persists; scanning + reconciling
+  restart automatically once you log back in. Nothing to restart.
+- **The only thing a reboot kills is a temporary `caffeinate`** — which is why the
+  permanent `pmset -c sleep 0` matters. With it set, reboots are fully handled.
+- **On battery / WiFi off / brief shutdown** — those runs just skip. Harmless for
+  paper: markets still resolve and the next reconcile catches up.
+
+### Checking on it / manual controls
+```bash
+cd ~/Projects/oddpool-arb/whale-tracker
+crontab -l                          # confirm jobs are scheduled
+node paper-reconcile.mjs --report   # scorecard: win rate, ROI, P&L
+node favorites-scan.mjs --paper     # manually open a fresh batch
+tail -20 paper.log                  # what the cron jobs have done
+```
+
+Check weekly. After ~2–4 weeks / 50–100+ closed trades, compare the live win-rate
+and ROI to the backtest (87% / ~+9%). Only if they match → do the $1 canary
+(`clob-check.mjs` first) before any real money. Paper only until then.
+
 ## The bar, stated honestly
 
 Even a validated wallet is "follow with realistic expectations of a small, risky
