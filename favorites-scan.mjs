@@ -44,7 +44,9 @@ for (const m of markets) {
 }
 
 picks.sort((a, b) => b.edge - a.edge);
-const { selected, skipped, deployed, byCategory, bankroll } = diversify(picks);
+const MAXDAYS = arg('maxdays', 0);   // only favorites resolving within N days (0 = any)
+const eligible = MAXDAYS ? picks.filter((p) => p.hoursLeft != null && p.hoursLeft <= MAXDAYS * 24) : picks;
+const { selected, skipped, deployed, byCategory, bankroll } = diversify(eligible);
 const top = selected.slice(0, TOP);
 
 console.log(`── ${picks.length} favorites in ${(LO * 100).toFixed(0)}-${(HI * 100).toFixed(0)}¢ band · ${selected.length} pass diversification (showing ${top.length}) ──`);
