@@ -29,7 +29,11 @@ const SLIP = CONFIG.MAX_ENTRY_SLIPPAGE;
 
 async function poll() {
   let trades;
-  try { trades = await getRecentTrades({ limit: 500 }); }
+  // Pull 1000, not 500: on busy days (a match day + a freshly-listed election
+  // market) real actionable signals scoring 3-4/5 fall OUTSIDE a 500-trade window
+  // and get silently missed. Verified live 2026-07-06 — three score-3+ bets sat in
+  // the 500-1000 recency band and the old limit never saw them.
+  try { trades = await getRecentTrades({ limit: 1000 }); }
   catch (e) { console.error('  (trade fetch failed:', e.message, ')'); return 0; }
 
   let hits = 0;
