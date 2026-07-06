@@ -76,7 +76,7 @@ export function categorize(q = '') {
   if (/senate|president|election|nominee|governor|congress|democrat|republican|primary|parliament|prime minister|mayor|vote/.test(s)) return 'politics';
   if (/russia|ukraine|israel|gaza|\bwar\b|capture|ceasefire|nuclear|invade|hostage|troops/.test(s)) return 'geopolitics';
   if (/inflation|\bgdp\b|interest rate|\bfed\b|unemployment|recession|market cap|price.*between|rate cut/.test(s)) return 'econ';
-  if (/ vs\.? | o\/u |over|under|goals|wins|match|league|\bcup\b|tournament|nba|\bnfl\b|wimbledon|tennis|soccer|football|series/.test(s)) return 'sports';
+  if (/spread:|handicap|\([-+]\d+(\.\d+)?\)|both teams|to score|corners|reg time|advances|\bfc\b|\bfk\b| vs\.? | o\/u |over|under|goals|wins|match|league|\bcup\b|tournament|nba|\bnfl\b|mlb|nhl|wimbledon|tennis|soccer|football|baseball|series/.test(s)) return 'sports';
   return 'other';
 }
 

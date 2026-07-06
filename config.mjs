@@ -39,6 +39,9 @@ export const CONFIG = {
   MAX_CATEGORY_FRAC: 0.30,   // ≤30% of bankroll in any one category
   MAX_DEPLOYED_FRAC: 0.50,   // deploy ≤50% of bankroll at once (keep dry powder)
   MAX_POSITIONS: 40,         // total concurrent positions cap
+  // Favorites: trade real-world EVENT markets only. Sports = unpredictable + weak
+  // edge (+1%) + intra-game correlation; crypto = price speculation, not events.
+  FAV_EXCLUDE: ['sports', 'crypto'],   // → politics, geopolitics, econ, world/other
   // Live-execution hard safety caps (executor cannot exceed these, ever):
   EXEC_MAX_ORDER_USD: 25,    // no single real order larger than this
   EXEC_MAX_TOTAL_USD: 250,   // no more than this total across a run

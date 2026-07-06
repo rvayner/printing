@@ -45,7 +45,9 @@ for (const m of markets) {
 
 picks.sort((a, b) => b.edge - a.edge);
 const MAXDAYS = arg('maxdays', 0);   // only favorites resolving within N days (0 = any)
-const eligible = MAXDAYS ? picks.filter((p) => p.hoursLeft != null && p.hoursLeft <= MAXDAYS * 24) : picks;
+const eligible = picks
+  .filter((p) => !CONFIG.FAV_EXCLUDE.includes(p.category))        // real-world events only (no sports/crypto)
+  .filter((p) => !MAXDAYS || (p.hoursLeft != null && p.hoursLeft <= MAXDAYS * 24));
 const { selected, skipped, deployed, byCategory, bankroll } = diversify(eligible);
 const top = selected.slice(0, TOP);
 
