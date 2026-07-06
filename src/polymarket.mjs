@@ -102,7 +102,14 @@ export async function getActiveMarkets({ limit = 800 } = {}) {
       const favIndex = prices.indexOf(Math.max(...prices));
       out.push({
         conditionId: m.conditionId, question: m.question, category: categorize(m.question),
-        eventSlug: m.eventSlug || (Array.isArray(m.events) && m.events[0]?.slug) || m.conditionId,
+        // Group by the underlying GAME, not the prop — Polymarket splits one match
+        // into many "events" (corners/totals/goals), which slips past ≤1-per-event
+        // and stacks correlated bets on a single game. Collapse to the dated prefix.
+        eventSlug: (() => {
+          const raw = m.eventSlug || (Array.isArray(m.events) && m.events[0]?.slug) || m.conditionId;
+          const g = String(raw).match(/^(.*?\d{4}-\d{2}-\d{2})/);   // e.g. fifwc-mex-eng-2026-07-05
+          return g ? g[1] : raw;
+        })(),
         favIndex, favPrice: prices[favIndex], favName: outcomes[favIndex] || `outcome[${favIndex}]`,
         liquidity: Number(m.liquidity || m.liquidityNum || 0),
         endDate: m.endDate ? Date.parse(m.endDate) : null,
@@ -224,7 +231,10 @@ export async function getMarketState(conditionId) {
 // Resolution of a (possibly settled) market: winning outcome index, or null if
 // not resolved yet. Used by paper-reconcile to close paper positions.
 export async function getMarketResolution(conditionId) {
-  const arr = await getJson(`${GAMMA}/markets?condition_ids=${conditionId}`);
+  // MUST include closed=true — Gamma's default condition_ids query returns only
+  // OPEN markets, so a market vanishes from it the moment it resolves (the exact
+  // moment we need to settle it).
+  const arr = await getJson(`${GAMMA}/markets?closed=true&condition_ids=${conditionId}`);
   const m = Array.isArray(arr) ? arr[0] : arr;
   if (!m || m.closed !== true) return null;
   let prices = [];
