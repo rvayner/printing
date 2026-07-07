@@ -34,6 +34,13 @@ export const CONFIG = {
   SMART_LO: 0.35, SMART_HI: 0.70, // uncertain band where insider info shows
   SMART_EXCLUDE: ['sports', 'crypto'], // no insider edge here (sharp bettors, not insiders)
   SMART_FRESH_TRADES: 25,    // a wallet with ≤ this many trades = FRESH (insider signature)
+  // Market-maturity guard — a big bet is only trustworthy on a SETTLED, liquid,
+  // reasonably-dated market. Rejects the freshly-listed / thin / far-dated traps
+  // (e.g. a just-listed Russian election market where the "favorite" side is
+  // obviously mispriced). Verified live 2026-07-06.
+  SMART_MIN_MATURITY_LIQ: 10000,   // market needs a real book (not seeded/thin) to trust its price
+  SMART_MAX_DAYS_TO_RESOLVE: 45,   // don't lock capital in far-dated bets; insider edge decays
+  SMART_MIN_MARKET_AGE_HOURS: 24,  // let a new market's price settle before trusting a "big bet"
   // Diversification guard (favorites have negative skew → correlation is the risk):
   MAX_PER_EVENT: 1,          // at most this many positions per Polymarket event
   MAX_CATEGORY_FRAC: 0.30,   // ≤30% of bankroll in any one category

@@ -11,7 +11,7 @@
 // someone betting big on something the market still thinks is a coin flip.
 
 import { CONFIG } from './config.mjs';
-import { getRecentTrades, getWalletActivity, categorize } from './src/polymarket.mjs';
+import { getRecentTrades, getWalletActivity, getMarketState, categorize } from './src/polymarket.mjs';
 import { kellyStake } from './src/sizing.mjs';
 import { PaperBook } from './src/paper.mjs';
 import { sendAlert, configuredChannels } from './src/notify.mjs';
@@ -51,8 +51,27 @@ async function poll() {
     try { walletTradeCount = (await getWalletActivity(t.wallet, { limit: CONFIG.SMART_FRESH_TRADES + 5 })).length; }
     catch { /* unknown */ }
 
-    const sig = insiderScore({ notional: t.notional, price: t.price, category: cat, walletTradeCount });
-    if (!sig.actionable || sig.score < MIN_SCORE) continue;   // must clear the z=3.1 bar
+    // market maturity — reject freshly-listed / thin / far-dated markets where a
+    // big bet's price isn't trustworthy (the Russian-election trap). Best-effort;
+    // unknown metadata does not block (never hard-fail).
+    let liquidity = null, hoursToResolve = null, marketAgeHours = null;
+    try {
+      const ms = await getMarketState(t.conditionId);
+      if (ms) {
+        liquidity = ms.liquidity || null;
+        hoursToResolve = ms.endDate ? (ms.endDate - Date.now()) / 3600e3 : null;
+        marketAgeHours = ms.createdAt ? (Date.now() - ms.createdAt) / 3600e3 : null;
+      }
+    } catch { /* unknown → lenient */ }
+
+    const sig = insiderScore({ notional: t.notional, price: t.price, category: cat,
+      walletTradeCount, liquidity, hoursToResolve, marketAgeHours });
+    // Show the guard's work: a big bet that clears the score bar but fails maturity
+    // is exactly the trap we want to see rejected, not silently dropped.
+    if (sig.score >= MIN_SCORE && sig.big && sig.event && sig.uncertain && !sig.mature) {
+      console.log(`  ✗ maturity-guard rejected $${t.notional.toFixed(0)} @ ${(t.price * 100).toFixed(0)}¢ [${cat}] "${(t.title || '').slice(0, 45)}" — ${sig.maturityReason}`);
+    }
+    if (!sig.actionable || sig.score < MIN_SCORE) continue;   // z=3.1 bar AND maturity guard
     if (FRESH_ONLY && !sig.fresh) continue;                    // hard filter: new accounts only
 
     const entry = Math.min(0.95, t.price + SLIP);
@@ -62,6 +81,7 @@ async function poll() {
       `   ${(t.title || '').slice(0, 70)}`,
       `   "${(t.outcome || `outcome[${t.outcomeIndex}]`)}" · wallet ${t.wallet?.slice(0, 10)}…${sig.fresh ? ` (FRESH: ${walletTradeCount} trades ⚠)` : ''}`,
       `   FOLLOW: buy ≤${(entry * 100).toFixed(0)}¢ · est win ${(sig.expWin * 100).toFixed(0)}% · size ~$${size.toFixed(0)}`,
+      `   market: ${sig.maturityReason}${liquidity ? ` · liq $${Math.round(liquidity)}` : ''}${hoursToResolve != null ? ` · ${Math.round(hoursToResolve / 24)}d left` : ''}`,
       `   ⚖ statistically-validated insider signal — NOT a lock; act fast, price moves.`,
     ].join('\n');
     await sendAlert(text);

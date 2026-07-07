@@ -228,7 +228,11 @@ export async function getMarketState(conditionId) {
     category: m.category || 'other',
     open: m.active === true && m.closed !== true,
     endDate: m.endDate ? Date.parse(m.endDate) : null,
+    // createdAt / startDate let us reject freshly-listed markets whose prices
+    // haven't settled yet (a "big bet" on a 2-hour-old book is noise, not signal).
+    createdAt: m.createdAt ? Date.parse(m.createdAt) : (m.startDate ? Date.parse(m.startDate) : null),
     liquidity: Number(m.liquidity || m.liquidityNum || 0),
+    volume: Number(m.volume || m.volumeNum || 0),
     tokenIds: JSON.parse(m.clobTokenIds || '[]'),
   };
 }
