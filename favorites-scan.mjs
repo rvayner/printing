@@ -32,7 +32,7 @@ console.log(`  ${markets.length} open markets fetched\n`);
 const picks = [];
 for (const m of markets) {
   if (m.favPrice < LO || m.favPrice > HI) continue;
-  if (m.liquidity < CONFIG.MIN_LIQUIDITY) continue;
+  if (m.liquidity < CONFIG.FAV_MIN_LIQUIDITY) continue;   // real depth only — no thin weather junk
   if (HIGH_FREQ.test(m.question || '')) continue;       // skip crypto HFT churn
   const entry = Math.min(0.98, m.favPrice + SLIP);
   const winRate = calibWinRate(m.favPrice);

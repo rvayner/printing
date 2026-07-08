@@ -76,12 +76,16 @@ export function categorize(q = '') {
   if (/senate|president|election|nominee|governor|congress|democrat|republican|primary|parliament|prime minister|mayor|vote/.test(s)) return 'politics';
   if (/russia|ukraine|israel|gaza|\bwar\b|capture|ceasefire|nuclear|invade|hostage|troops/.test(s)) return 'geopolitics';
   if (/inflation|\bgdp\b|interest rate|\bfed\b|unemployment|recession|market cap|price.*between|rate cut/.test(s)) return 'econ';
+  // Weather — its own category so it can be excluded. Forecast markets are the
+  // PUREST favorite-longshot play statistically, but they're thin, unpredictable
+  // day-to-day, and (per user) not something to trust. Checked before sports.
+  if (/temperature|\bhigh(est)? temp|\blow(est)? temp|°c|°f|degrees (celsius|fahrenheit)|\brainfall\b|\bsnowfall\b|weather/.test(s)) return 'weather';
   // Sports LAST, so "Trump win the election" stays political. Dated head-to-head
   // markets — "Will X win on YYYY-MM-DD", "Exact Score: A 3 - 3 B", "X vs Y" — are
   // how Polymarket lists tournament games; they were leaking through as 'other'
   // and polluting the real-world whale signal. NOTE: don't use a bare "\d - \d"
   // score pattern — it collides with ISO dates (2026-07-06). Anchor on literals.
-  if (/spread:|handicap|\([-+]\d+(\.\d+)?\)|both teams|to score|corners|reg time|advances|\bfc\b|\bfk\b| vs\.? | o\/u |over|under|goals|wins|match|league|\bcup\b|tournament|nba|\bnfl\b|mlb|nhl|wimbledon|tennis|soccer|football|baseball|series|exact score|win on \d{4}-\d{2}-\d{2}|draw on \d{4}-\d{2}-\d{2}|beat .* on \d{4}-\d{2}-\d{2}/.test(s)) return 'sports';
+  if (/spread:|handicap|\([-+]\d+(\.\d+)?\)|both teams|to score|corners|reg time|advances|\bfc\b|\bfk\b| vs\.? | o\/u |over|under|goals|wins|match|league|\bcup\b|tournament|nba|\bnfl\b|mlb|nhl|wimbledon|tennis|soccer|football|baseball|series|exact score|win on \d{4}-\d{2}-\d{2}|draw on \d{4}-\d{2}-\d{2}|beat .* on \d{4}-\d{2}-\d{2}|first half|second half|half-?time|to win the (first|second|match|game|half)|penalt(y|ies)|\bset \d|clean sheet/.test(s)) return 'sports';
   return 'other';
 }
 

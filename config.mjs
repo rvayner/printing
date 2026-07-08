@@ -48,7 +48,13 @@ export const CONFIG = {
   MAX_POSITIONS: 40,         // total concurrent positions cap
   // Favorites: trade real-world EVENT markets only. Sports = unpredictable + weak
   // edge (+1%) + intra-game correlation; crypto = price speculation, not events.
-  FAV_EXCLUDE: ['sports', 'crypto'],   // → politics, geopolitics, econ, world/other
+  FAV_EXCLUDE: ['sports', 'crypto', 'weather'],   // → politics, geopolitics, econ, world/other
+  // Favorites need REAL depth, not the $1k generic floor. Thin markets (esp.
+  // weather: Panama City settled at $204 liquidity and lost the full stake) are
+  // where junk prices live and where you can't actually deploy money. A $10k
+  // floor excludes almost all thin weather and keeps the deep econ/politics/geo
+  // markets where the favorite-longshot edge is real and tradeable.
+  FAV_MIN_LIQUIDITY: 10000,
   // Live-execution hard safety caps (executor cannot exceed these, ever):
   EXEC_MAX_ORDER_USD: 25,    // no single real order larger than this
   EXEC_MAX_TOTAL_USD: 250,   // no more than this total across a run
