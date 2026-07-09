@@ -54,11 +54,12 @@ async function poll() {
     // market maturity — reject freshly-listed / thin / far-dated markets where a
     // big bet's price isn't trustworthy (the Russian-election trap). Best-effort;
     // unknown metadata does not block (never hard-fail).
-    let liquidity = null, hoursToResolve = null, marketAgeHours = null;
+    let liquidity = null, hoursToResolve = null, marketAgeHours = null, marketEnd = null;
     try {
       const ms = await getMarketState(t.conditionId);
       if (ms) {
         liquidity = ms.liquidity || null;
+        marketEnd = ms.endDate || null;
         hoursToResolve = ms.endDate ? (ms.endDate - Date.now()) / 3600e3 : null;
         marketAgeHours = ms.createdAt ? (Date.now() - ms.createdAt) / 3600e3 : null;
       }
@@ -86,9 +87,18 @@ async function poll() {
     ].join('\n');
     await sendAlert(text);
     if (paperBook) {
-      paperBook.open({ id: `smart-${t.id}`, wallet: t.wallet, marketId: t.conditionId,
-        question: t.title, side: `outcome[${t.outcomeIndex}]`, outcomeIndex: t.outcomeIndex,
-        entry, resolveTime: null, stake: Math.max(10, size) });
+      // Concentration guard: at most ONE open insider position per market. Multiple
+      // whales pile into the same market, and without this we opened 4 correlated
+      // positions on one market — when it lost, it lost 4x (-$316, the whole insider
+      // book). ≤1-per-market mirrors the favorites diversify() rule.
+      const dup = paperBook.positions.some((pp) => pp.status === 'open' && pp.marketId === t.conditionId);
+      if (dup) {
+        console.log(`  (already hold an open insider position on this market — skip duplicate)`);
+      } else {
+        paperBook.open({ id: `smart-${t.id}`, wallet: t.wallet, marketId: t.conditionId,
+          question: t.title || `market ${t.conditionId?.slice(0, 10)}`, side: `outcome[${t.outcomeIndex}]`,
+          outcomeIndex: t.outcomeIndex, entry, resolveTime: marketEnd, stake: Math.max(10, size) });
+      }
     }
     hits++;
   }
