@@ -12,25 +12,34 @@ async function kj(path) {
   return r.json();
 }
 
-// Open markets, normalized. Excludes multi-leg parlays (MVE) — plain binaries only.
-export async function getKalshiMarkets({ limit = 2000, maxPages = 4 } = {}) {
+// Open markets, normalized. Kalshi's open feed is DOMINATED by zero-quote,
+// zero-volume multi-leg (MVE) collections — e.g. an MLB division listed as one
+// comma-joined market. Those have no two-sided quote, so a strict yes_ask/yes_bid
+// filter returns almost nothing within a few pages. Fix: skip MVE collections
+// explicitly, require real trading (volume OR liquidity), and fall back to
+// last_price when the book is one-sided, so we surface genuinely tradeable binaries.
+export async function getKalshiMarkets({ limit = 2000, maxPages = 8, minVolume = 1 } = {}) {
   const out = [];
   let cursor = '', pages = 0;
   while (out.length < limit && pages++ < maxPages) {
     // eslint-disable-next-line no-await-in-loop
     const d = await kj(`/markets?limit=1000&status=open${cursor ? `&cursor=${cursor}` : ''}`);
     for (const m of d.markets || []) {
-      if (/mve|multi/i.test(m.market_type || '')) continue; // skip explicit multi-leg
+      if (/mve|multi/i.test(m.market_type || '') || m.mve_collection_ticker) continue; // skip multi-leg collections
+      if ((m.title || '').includes(',')) continue;           // comma-joined = collection, not a binary
       const yesAsk = parseFloat(m.yes_ask_dollars), yesBid = parseFloat(m.yes_bid_dollars);
-      if (!(yesAsk > 0 && yesBid > 0)) continue;             // require an active two-sided quote
-      const yes = (yesAsk + yesBid) / 2;
+      const last = parseFloat(m.last_price_dollars);
+      const vol = parseFloat(m.volume_fp || 0), liq = parseFloat(m.liquidity_dollars || 0);
+      if (vol < minVolume && liq <= 0) continue;             // require it to actually trade
+      // mid price: prefer a two-sided quote, else fall back to last traded price
+      const yes = (yesAsk > 0 && yesBid > 0) ? (yesAsk + yesBid) / 2 : (last > 0 && last < 1 ? last : null);
       if (!(yes > 0 && yes < 1)) continue;
       const favSide = yes >= 0.5 ? 'yes' : 'no';
       out.push({
         venue: 'kalshi', ticker: m.ticker, title: m.title,
         yes, favSide, favPrice: Math.max(yes, 1 - yes),
-        favEntry: favSide === 'yes' ? yesAsk : parseFloat(m.no_ask_dollars),
-        volume: parseFloat(m.volume_fp || 0), liquidity: parseFloat(m.liquidity_dollars || 0),
+        favEntry: favSide === 'yes' ? (yesAsk || last) : (parseFloat(m.no_ask_dollars) || 1 - last),
+        volume: vol, liquidity: liq,
         closeTime: m.close_time ? Date.parse(m.close_time) : null,
       });
     }
