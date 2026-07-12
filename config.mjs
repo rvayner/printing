@@ -34,6 +34,12 @@ export const CONFIG = {
   SMART_LO: 0.35, SMART_HI: 0.70, // uncertain band where insider info shows
   SMART_EXCLUDE: ['sports', 'crypto'], // no insider edge here (sharp bettors, not insiders)
   SMART_FRESH_TRADES: 25,    // a wallet with ≤ this many trades = FRESH (insider signature)
+  // Insider entry slippage — measured empirically (slippage-model.mjs) from what
+  // followers ACTUALLY paid after a whale bet: median ~2.7¢, but p90 ~5.8¢. You're
+  // racing other followers into a thin informed market, so assume a worse-than-
+  // median fill. 5¢ (conservative) keeps the paper trade HONEST — it errs toward
+  // understating the edge, never overstating it.
+  SMART_SLIPPAGE: 0.05,
   // Market-maturity guard — a big bet is only trustworthy on a SETTLED, liquid,
   // reasonably-dated market. Rejects the freshly-listed / thin / far-dated traps
   // (e.g. a just-listed Russian election market where the "favorite" side is

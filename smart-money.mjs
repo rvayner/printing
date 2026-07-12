@@ -25,7 +25,7 @@ const FRESH_ONLY = has('fresh-only');   // hard filter: only new-account insider
 const MIN_SCORE = arg('min-score', 3);
 const seen = new Set();
 const paperBook = PAPER ? new PaperBook(new URL('./paper-positions.json', import.meta.url).pathname) : null;
-const SLIP = CONFIG.MAX_ENTRY_SLIPPAGE;
+const SLIP = CONFIG.SMART_SLIPPAGE;   // conservative, empirically-measured follower slippage (slippage-model.mjs)
 
 async function poll() {
   let trades;
