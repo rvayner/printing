@@ -6,18 +6,23 @@
 
 import { PaperBook, sparkline } from './src/paper.mjs';
 import { getMarketResolution } from './src/polymarket.mjs';
+import { getKalshiResolution } from './src/kalshi.mjs';
 
 const PAPER_PATH = new URL('./paper-positions.json', import.meta.url).pathname;
 const REPORT_ONLY = process.argv.includes('--report');
 const book = new PaperBook(PAPER_PATH);
 
 if (!REPORT_ONLY) {
-  const openMarkets = [...new Set(book.positions.filter((p) => p.status === 'open').map((p) => p.marketId))];
-  console.log(`Reconciling ${openMarkets.length} open market(s)…`);
+  // Route each open market to its venue's settlement source: Kalshi positions
+  // (venue='kalshi') settle via the Kalshi result, everything else via Polymarket.
+  const open = book.positions.filter((p) => p.status === 'open');
+  const markets = [...new Map(open.map((p) => [p.marketId, p.venue || 'polymarket'])).entries()];
+  const nK = markets.filter((m) => m[1] === 'kalshi').length;
+  console.log(`Reconciling ${markets.length} open market(s) (${nK} Kalshi, ${markets.length - nK} Polymarket)…`);
   let closed = 0;
-  for (const marketId of openMarkets) {
+  for (const [marketId, venue] of markets) {
     let winningIndex;
-    try { winningIndex = await getMarketResolution(marketId); }
+    try { winningIndex = venue === 'kalshi' ? await getKalshiResolution(marketId) : await getMarketResolution(marketId); }
     catch (e) { console.error(`  (resolution fetch failed for ${marketId}: ${e.message})`); continue; }
     if (winningIndex == null) continue;            // not resolved yet
     closed += book.resolveOutcome(marketId, winningIndex);

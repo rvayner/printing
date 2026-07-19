@@ -15,11 +15,11 @@ export class PaperBook {
   has(id) { return this.positions.some((p) => p.id === id); }
 
   // Open a simulated position: buy `shares` of the followed side at `entry`.
-  open({ id, wallet, marketId, question, side, outcomeIndex = null, entry, resolveTime, stake = this.stake }) {
+  open({ id, wallet, marketId, question, side, outcomeIndex = null, entry, resolveTime, stake = this.stake, venue = 'polymarket' }) {
     if (this.has(id)) return false;
     const shares = stake / entry;                 // each share pays $1 if it wins
     this.positions.push({
-      id, wallet, marketId, question, side, outcomeIndex, entry, stake, shares,
+      id, wallet, marketId, question, side, outcomeIndex, entry, stake, shares, venue,
       resolveTime: resolveTime ?? null, status: 'open', won: null, pnl: null,
     });
     this._save();

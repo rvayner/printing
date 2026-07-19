@@ -91,6 +91,21 @@ export async function getKalshiRealWorldMarkets({ limit = 1500, maxPages = 8, mi
   return out.slice(0, limit);
 }
 
+// Settlement lookup for a single market. Kalshi finalizes with status
+// 'finalized'/'settled' and result 'yes'/'no'. We map to an outcome index that
+// matches how kalshi-favorites opens positions: yes → 0, no → 1. Returns null if
+// not yet settled (so paper-reconcile just skips it, same as Polymarket).
+export async function getKalshiResolution(ticker) {
+  try {
+    const d = await kj(`/markets/${ticker}`);
+    const m = d.market || d;
+    if (!m || !['finalized', 'settled'].includes(m.status)) return null;
+    if (m.result === 'yes') return 0;
+    if (m.result === 'no') return 1;
+    return null;                                  // voided / no clear result
+  } catch { return null; }
+}
+
 // Recent trades (size + price + taker side + block-trade flag). No trader identity.
 export async function getKalshiTrades({ limit = 1000 } = {}) {
   const out = [];

@@ -15,7 +15,8 @@ function calibWinRate(p) {
 
 const PATH = new URL('./paper-positions.json', import.meta.url).pathname;
 const all = existsSync(PATH) ? JSON.parse(readFileSync(PATH)) : [];
-const isIns = (p) => (p.id || '').startsWith('smart-') || (p.wallet && p.wallet !== 'FAVORITES');
+const isIns = (p) => (p.id || '').startsWith('smart-');
+const isKalshi = (p) => p.venue === 'kalshi' || (p.id || '').startsWith('kfav-');
 
 function assess(name, positions) {
   const closed = positions.filter((p) => (p.status === 'closed' || p.status === 'exited') && p.entry > 0);
@@ -40,9 +41,10 @@ function assess(name, positions) {
   console.log(`  → ${verdict}`);
 }
 
-const fav = all.filter((p) => !isIns(p));
-assess('FAVORITES — clean real-world only', fav.filter((p) => !['weather', 'sports', 'crypto'].includes(categorize(p.question || ''))));
-assess('FAVORITES — weather (excluded regime, for reference)', fav.filter((p) => categorize(p.question || '') === 'weather'));
-assess('INSIDER', all.filter(isIns));
+const fav = all.filter((p) => !isIns(p) && !isKalshi(p));
+assess('FAVORITES (Polymarket) — clean real-world only', fav.filter((p) => !['weather', 'sports', 'crypto'].includes(categorize(p.question || ''))));
+assess('FAVORITES (Polymarket) — weather (excluded regime, for reference)', fav.filter((p) => categorize(p.question || '') === 'weather'));
+assess('FAVORITES (Kalshi) — real-world', all.filter((p) => !isIns(p) && isKalshi(p)));
+assess('INSIDER (Polymarket)', all.filter(isIns));
 console.log(`\nThe point: judge the edge vs its OWN backtested expectation, not vs zero.`);
 console.log(`A losing week with z≈0 means the edge is intact and you hit variance — NOT that it is broken.`);

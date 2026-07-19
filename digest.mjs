@@ -12,11 +12,13 @@ import { categorize } from './src/polymarket.mjs';
 const PATH = new URL('./paper-positions.json', import.meta.url).pathname;
 const all = existsSync(PATH) ? JSON.parse(readFileSync(PATH)) : [];
 
-// An insider position is tagged with the whale's wallet + a `smart-` id; a
-// favorites position is `FAVORITES` / `fav-`. Fall back to id prefix.
-const isInsider = (p) => (p.id || '').startsWith('smart-') || (p.wallet && p.wallet !== 'FAVORITES');
-const favorites = all.filter((p) => !isInsider(p));
+// Three tracks: Polymarket favorites (fav-/FAVORITES), Kalshi favorites
+// (kfav-/venue=kalshi), and the insider/whale layer (smart-, Polymarket only).
+const isInsider = (p) => (p.id || '').startsWith('smart-');
+const isKalshi = (p) => p.venue === 'kalshi' || (p.id || '').startsWith('kfav-');
 const insider = all.filter(isInsider);
+const kalshiFav = all.filter((p) => !isInsider(p) && isKalshi(p));
+const favorites = all.filter((p) => !isInsider(p) && !isKalshi(p));
 
 function reportFor(positions) {
   const b = new PaperBook(null);       // no path → won't write
@@ -55,8 +57,9 @@ function fmt(name, positions) {
   return { text: lines.join('\n'), r };
 }
 
-const fav = fmt('FAVORITES edge (favorite-longshot bias)', favorites);
-const ins = fmt('INSIDER edge (smart-money / whale)', insider);
+const fav = fmt('FAVORITES — Polymarket', favorites);
+const kfav = fmt('FAVORITES — Kalshi', kalshiFav);
+const ins = fmt('INSIDER edge (smart-money / whale · Polymarket)', insider);
 const combined = reportFor(all);
 
 const header = `📊 WHALE-TRACKER WEEKLY DIGEST\n   (paper — no real money · trust only after HUNDREDS of closed trades)`;
@@ -64,7 +67,7 @@ const footer = `━━━━━━ COMBINED ━━━━━━\n  ${combined.nCl
   + `\nRemember: a small edge LOSES over the first few hundred trades (variance).\n`
   + `Judge each edge on its OWN row above, on volume — not on any single week.`;
 
-const out = [header, '', fav.text, '', ins.text, '', footer].join('\n');
+const out = [header, '', fav.text, '', kfav.text, '', ins.text, '', footer].join('\n');
 console.log(out);
 
 if (process.argv.includes('--notify')) {
