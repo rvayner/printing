@@ -61,6 +61,12 @@ export const CONFIG = {
   // floor excludes almost all thin weather and keeps the deep econ/politics/geo
   // markets where the favorite-longshot edge is real and tradeable.
   FAV_MIN_LIQUIDITY: 10000,
+  // Category winnability (measured on 40k historical favorite bets — see
+  // category-winnability.mjs). Favorites don't win equally: geopolitics 98%/+31%,
+  // econ 96%/+26%, politics 91%/+18%, other 86%/+14%, sports 80%/+4% (excluded).
+  // These modest weights bias SELECTION toward the winnable categories without
+  // overfitting to the exact historical rates. Focus where favorites reliably win.
+  FAV_CATEGORY_RANK: { geopolitics: 1.30, econ: 1.20, politics: 1.10, world: 1.05, other: 1.00 },
   // Live-execution hard safety caps (executor cannot exceed these, ever):
   EXEC_MAX_ORDER_USD: 25,    // no single real order larger than this
   EXEC_MAX_TOTAL_USD: 250,   // no more than this total across a run

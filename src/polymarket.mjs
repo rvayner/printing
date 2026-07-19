@@ -85,7 +85,7 @@ export function categorize(q = '') {
   // how Polymarket lists tournament games; they were leaking through as 'other'
   // and polluting the real-world whale signal. NOTE: don't use a bare "\d - \d"
   // score pattern — it collides with ISO dates (2026-07-06). Anchor on literals.
-  if (/spread:|handicap|\([-+]\d+(\.\d+)?\)|both teams|to score|corners|reg time|advances|\bfc\b|\bfk\b| vs\.? | o\/u |over|under|goals|wins|match|league|\bcup\b|tournament|nba|\bnfl\b|mlb|nhl|wimbledon|tennis|soccer|football|baseball|series|exact score|win on \d{4}-\d{2}-\d{2}|draw on \d{4}-\d{2}-\d{2}|beat .* on \d{4}-\d{2}-\d{2}|first half|second half|half-?time|to win the (first|second|match|game|half)|penalt(y|ies)|\bset \d|clean sheet/.test(s)) return 'sports';
+  if (/spread:|handicap|\([-+]\d+(\.\d+)?\)|both teams|to score|corners|reg time|advances|\bfc\b|\bfk\b| vs\.? | o\/u |over|under|goals|wins|match|league|\bcup\b|tournament|nba|\bnfl\b|mlb|nhl|wimbledon|tennis|soccer|football|baseball|series|exact score|win on \d{4}-\d{2}-\d{2}|draw on \d{4}-\d{2}-\d{2}|beat .* on \d{4}-\d{2}-\d{2}|first half|second half|half-?time|to win the (first|second|match|game|half)|penalt(y|ies)|\bset \d|clean sheet|blast (bounty|premier)|dreamhack|\besl\b|\biem\b|\bdota\b|valorant|counter-strike|\bcs2\b|league of legends|rocket league|overwatch|esports|majors?\b.*(cs|dota|valorant)/.test(s)) return 'sports';
   return 'other';
 }
 

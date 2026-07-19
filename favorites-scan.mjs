@@ -40,10 +40,15 @@ for (const m of markets) {
   if (edge <= 0) continue;
   const size = kellyStake({ bankroll: CONFIG.BANKROLL, price: entry, edgeLo: edge, liquidity: m.liquidity });
   const hoursLeft = m.endDate ? (m.endDate - Date.now()) / 3600e3 : null;
-  picks.push({ ...m, entry, winRate, edge, size, hoursLeft, expRet: edge / entry });
+  // Winnability weight — bias selection toward categories where favorites
+  // reliably win (geopolitics/econ/politics), measured on history.
+  const qWeight = CONFIG.FAV_CATEGORY_RANK[m.category] ?? 1.0;
+  picks.push({ ...m, entry, winRate, edge, size, hoursLeft, expRet: edge / entry, qWeight, rank: edge * qWeight });
 }
 
-picks.sort((a, b) => b.edge - a.edge);
+// Rank by winnability-weighted edge so the diversifier prefers the categories
+// where favorites actually win (not all favorites are equal).
+picks.sort((a, b) => b.rank - a.rank);
 const MAXDAYS = arg('maxdays', 0);   // only favorites resolving within N days (0 = any)
 const eligible = picks
   .filter((p) => !CONFIG.FAV_EXCLUDE.includes(p.category))        // real-world events only (no sports/crypto)
@@ -56,7 +61,7 @@ console.log(`   deployed ~$${deployed.toFixed(0)}/${bankroll} (${(deployed / ban
 console.log(`   spread: ${[...byCategory.entries()].map(([c, s]) => `${c} $${s.toFixed(0)}`).join(' · ')}\n`);
 const lines = [];
 for (const p of top) {
-  const l = `${(p.favPrice * 100).toFixed(0)}¢ "${(p.favName || '').slice(0, 24)}" — ${p.question.slice(0, 60)}`
+  const l = `[${p.category}] ${(p.favPrice * 100).toFixed(0)}¢ "${(p.favName || '').slice(0, 24)}" — ${p.question.slice(0, 55)}`
     + `\n   buy ≤${(p.entry * 100).toFixed(0)}¢ · est win ${(p.winRate * 100).toFixed(0)}% · edge +${(p.edge * 100).toFixed(1)}¢ (~+${(p.expRet * 100).toFixed(0)}%) · size ~$${p.size.toFixed(0)} · liq $${p.liquidity.toFixed(0)}${p.hoursLeft ? ` · ${p.hoursLeft.toFixed(0)}h` : ''}`;
   console.log(l + '\n');
   lines.push(l);
